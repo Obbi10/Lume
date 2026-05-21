@@ -1,4 +1,4 @@
-import type { Participant, StudyRoom, ChatMessage } from '../types';
+import type { Participant, StudyRoom, ChatMessage, LeaderboardEntry } from '../types';
 
 const NAMES = [
   'Aria Chen', 'Marcus Webb', 'Zoe Patel', 'Liam Torres', 'Nadia Osei',
@@ -44,6 +44,44 @@ function seededRng(seed: number) {
     s = (s * 16807 + 0) % 2147483647;
     return (s - 1) / 2147483646;
   };
+}
+
+export function generateMockLeaderboard(): LeaderboardEntry[] {
+  const rand = seededRng(99);
+  const palettes = [
+    ['#38bdf8', '#818cf8', '#0f172a'],
+    ['#22d3ee', '#06b6d4', '#164e63'],
+    ['#a78bfa', '#38bdf8', '#1e1b4b'],
+    ['#34d399', '#38bdf8', '#064e3b'],
+    ['#f472b6', '#818cf8', '#1e1b4b'],
+    ['#fb923c', '#fbbf24', '#7c2d12'],
+    ['#38bdf8', '#0ea5e9', '#082f49'],
+    ['#e879f9', '#a78bfa', '#2e1065'],
+    ['#4ade80', '#22d3ee', '#052e16'],
+    ['#f87171', '#fb923c', '#450a0a'],
+  ];
+
+  return NAMES.map((name, i) => {
+    const seed = Math.floor(rand() * 1000);
+    const colors = palettes[seed % palettes.length];
+    const subjects = SUBJECT_SETS[i % SUBJECT_SETS.length];
+
+    // Generate realistic-feeling revision hours
+    const weeklyHours = 2 + rand() * 28;
+    const monthlyHours = weeklyHours * 3.5 + rand() * 20;
+    const totalHours = monthlyHours * 5 + rand() * 200;
+
+    return {
+      id: `lb-${i}`,
+      name,
+      artSeed: seed,
+      artColors: colors,
+      subjects,
+      weeklyMs: Math.round(weeklyHours * 3600000),
+      monthlyMs: Math.round(monthlyHours * 3600000),
+      totalMs: Math.round(totalHours * 3600000),
+    };
+  });
 }
 
 export function generateMockRooms(): StudyRoom[] {

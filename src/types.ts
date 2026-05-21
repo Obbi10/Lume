@@ -38,6 +38,19 @@ export interface StudyRoom {
   createdAt: number;
 }
 
+export type LeaderboardPeriod = 'weekly' | 'monthly' | 'total';
+
+export interface LeaderboardEntry {
+  id: string;
+  name: string;
+  artSeed: number;
+  artColors: string[];
+  subjects: string[];
+  weeklyMs: number;
+  monthlyMs: number;
+  totalMs: number;
+}
+
 export type TimerMode = 'stopwatch' | 'countdown';
 
 export interface TimerState {
