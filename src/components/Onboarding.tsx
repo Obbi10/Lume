@@ -51,6 +51,9 @@ export default function Onboarding({ onComplete }: Props) {
         artColors: colors,
         joinedAt: Date.now(),
         streak: 1,
+        weeklyMs: 0,
+        monthlyMs: 0,
+        totalMs: 0,
       });
     }
   };

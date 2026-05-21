@@ -8,6 +8,9 @@ export interface UserProfile {
   artColors: string[];
   joinedAt: number;
   streak: number;
+  weeklyMs: number;
+  monthlyMs: number;
+  totalMs: number;
 }
 
 export interface ChatMessage {

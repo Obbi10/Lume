@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { View, UserProfile, StudyRoom } from './types';
 import { generateMockRooms } from './utils/mockData';
 import Onboarding from './components/Onboarding';
@@ -7,15 +7,47 @@ import StudyRoomComponent from './components/StudyRoom';
 import Profile from './components/Profile';
 import CreateRoomModal from './components/CreateRoomModal';
 
+const PROFILE_KEY = 'lume_profile';
+const TODAY_KEY   = 'lume_today';
+
+function loadProfile(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? (JSON.parse(raw) as UserProfile) : null;
+  } catch { return null; }
+}
+
+function saveProfile(p: UserProfile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+}
+
+function loadTodayMs(): number {
+  try {
+    const raw = localStorage.getItem(TODAY_KEY);
+    if (!raw) return 0;
+    const { date, ms } = JSON.parse(raw) as { date: string; ms: number };
+    return date === new Date().toDateString() ? ms : 0;
+  } catch { return 0; }
+}
+
+function saveTodayMs(ms: number) {
+  localStorage.setItem(TODAY_KEY, JSON.stringify({ date: new Date().toDateString(), ms }));
+}
+
 export default function App() {
-  const [view, setView] = useState<View>('onboarding');
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [rooms, setRooms] = useState<StudyRoom[]>(generateMockRooms());
+  const [view, setView]         = useState<View>(() => loadProfile() ? 'rooms' : 'onboarding');
+  const [profile, setProfile]   = useState<UserProfile | null>(loadProfile);
+  const [rooms, setRooms]       = useState<StudyRoom[]>(generateMockRooms);
   const [activeRoom, setActiveRoom] = useState<StudyRoom | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [todayMs, setTodayMs] = useState(0);
+  const [todayMs, setTodayMs]   = useState<number>(loadTodayMs);
+
+  // Keep localStorage in sync
+  useEffect(() => { if (profile) saveProfile(profile); }, [profile]);
+  useEffect(() => { saveTodayMs(todayMs); }, [todayMs]);
 
   const handleOnboardingComplete = useCallback((p: UserProfile) => {
+    saveProfile(p);
     setProfile(p);
     setView('rooms');
   }, []);
@@ -25,10 +57,25 @@ export default function App() {
     setView('room');
   }, []);
 
-  const handleLeaveRoom = useCallback((sessionMs: number) => {
-    if (sessionMs > 0) setTodayMs(prev => prev + sessionMs);
+  const handleLeaveRoom = useCallback(() => {
     setActiveRoom(null);
     setView('rooms');
+  }, []);
+
+  // Fired each time the user confirms a session complete modal
+  const handleSessionConfirmed = useCallback((ms: number) => {
+    setTodayMs(prev => prev + ms);
+    setProfile(prev => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        weeklyMs:  prev.weeklyMs  + ms,
+        monthlyMs: prev.monthlyMs + ms,
+        totalMs:   prev.totalMs   + ms,
+      };
+      saveProfile(updated);
+      return updated;
+    });
   }, []);
 
   const handleCreateRoom = useCallback((roomData: Omit<StudyRoom, 'participants' | 'messages' | 'createdAt'>) => {
@@ -40,10 +87,12 @@ export default function App() {
     };
     setRooms(prev => [newRoom, ...prev]);
     setActiveRoom(newRoom);
+    setShowCreateModal(false);
     setView('room');
   }, []);
 
   const handleUpdateProfile = useCallback((updated: UserProfile) => {
+    saveProfile(updated);
     setProfile(updated);
   }, []);
 
@@ -71,6 +120,7 @@ export default function App() {
           room={activeRoom}
           currentUser={profile}
           onLeave={handleLeaveRoom}
+          onSessionConfirmed={handleSessionConfirmed}
         />
       )}
 
