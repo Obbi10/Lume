@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { StudyRoom } from '../types';
+import { generateShareCode } from '../utils/roomCode';
 import { X, ArrowRight, Copy, Check } from 'lucide-react';
 
 const SUBJECT_OPTIONS = [
@@ -37,8 +38,10 @@ export default function CreateRoomModal({ onClose, onCreate }: Props) {
     onCreate({ id: `room-${Date.now()}`, name: roomName.trim(), subject, maxCapacity: capacity, code });
   };
 
+  const shareCode = generateShareCode(roomName.trim(), subject, capacity, code);
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(code).catch(() => {});
+    navigator.clipboard.writeText(shareCode).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -127,13 +130,13 @@ export default function CreateRoomModal({ onClose, onCreate }: Props) {
               </button>
             </div>
 
-            <p className="text-text-muted text-sm mb-6">Share this code so others can join your room</p>
+            <p className="text-text-muted text-sm mb-6">Copy this code and share it — anyone can use it to join from any device</p>
 
             {/* Code display */}
-            <div className="bg-bg-elevated border border-accent/25 rounded-2xl p-6 mb-3">
-              <p className="text-text-muted text-xs uppercase tracking-wider mb-3">Room Code</p>
-              <p className="text-accent font-mono text-4xl font-bold tracking-[0.2em] glow-blue">{code}</p>
-              <p className="text-text-muted text-xs mt-3 truncate">{roomName} · {subject}</p>
+            <div className="bg-bg-elevated border border-accent/25 rounded-2xl p-5 mb-3">
+              <p className="text-text-muted text-xs uppercase tracking-wider mb-3">Share Code</p>
+              <p className="text-accent font-mono text-xs font-medium break-all leading-relaxed glow-blue">{shareCode}</p>
+              <p className="text-text-muted text-xs mt-3 truncate">{roomName.trim() || 'Room'} · {subject}</p>
             </div>
 
             <button

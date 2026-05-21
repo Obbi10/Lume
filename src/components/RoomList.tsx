@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { StudyRoom, UserProfile } from '../types';
+import { generateShareCode } from '../utils/roomCode';
 import AbstractAvatar from './AbstractAvatar';
 import { Users, ArrowRight, Plus, BookOpen, Flame, Clock, Copy, Check, Hash } from 'lucide-react';
 
@@ -27,9 +28,11 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
   const [copied, setCopied] = useState(false);
   const isFull = room.participants.length >= room.maxCapacity;
 
+  const shareCode = generateShareCode(room.name, room.subject, room.maxCapacity, room.code);
+
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(room.code).catch(() => {});
+    navigator.clipboard.writeText(shareCode).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -54,14 +57,14 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
       {/* Room code row */}
       <div className="flex items-center gap-2 mb-3 bg-bg-elevated border border-border rounded-xl px-3 py-2">
         <Hash size={11} className="text-text-muted flex-shrink-0" />
-        <span className="text-accent font-mono text-sm tracking-widest flex-1">{room.code}</span>
+        <span className="text-text-muted text-xs flex-1">Share code</span>
         <button
           onClick={handleCopy}
           className={`flex items-center gap-1 text-xs transition-colors flex-shrink-0 ${
-            copied ? 'text-green-400' : 'text-text-muted hover:text-accent'
+            copied ? 'text-green-400' : 'text-accent hover:text-accent/80'
           }`}
         >
-          {copied ? <><Check size={11} /> copied</> : <><Copy size={11} /> copy</>}
+          {copied ? <><Check size={11} /> copied!</> : <><Copy size={11} /> copy &amp; share</>}
         </button>
       </div>
 
@@ -113,17 +116,13 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinBy
 
   const handleJoinCode = () => {
     const trimmed = codeInput.trim();
-    if (trimmed.length < 6) { setCodeError('Enter a valid 6-character code'); return; }
+    if (!trimmed) { setCodeError('Paste a share code first'); return; }
     const found = onJoinByCode(trimmed);
-    if (!found) {
-      setCodeError('Room not found — check the code and try again');
-    }
+    if (!found) setCodeError('Code not recognised — make sure you copied the full share code');
   };
 
   const handleCodeChange = (val: string) => {
-    // Auto-format as XXX-XXX
-    const clean = val.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 6);
-    setCodeInput(clean.length > 3 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean);
+    setCodeInput(val);
     setCodeError('');
   };
 
@@ -204,9 +203,8 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinBy
               value={codeInput}
               onChange={e => handleCodeChange(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleJoinCode()}
-              placeholder="ABC-123"
-              maxLength={7}
-              className="flex-1 bg-bg-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder-text-muted text-sm focus:border-accent/50 transition-colors font-mono tracking-widest uppercase"
+              placeholder="Paste share code here"
+              className="flex-1 bg-bg-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder-text-muted text-sm focus:border-accent/50 transition-colors font-mono"
             />
             <button
               onClick={handleJoinCode}

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { View, UserProfile, StudyRoom } from './types';
+import { decodeShareCode } from './utils/roomCode';
 import Onboarding from './components/Onboarding';
 import RoomList from './components/RoomList';
 import StudyRoomComponent from './components/StudyRoom';
@@ -78,13 +79,39 @@ export default function App() {
     setView('room');
   }, []);
 
-  const handleJoinByCode = useCallback((code: string): boolean => {
-    const normalized = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-    const room = rooms.find(r => r.code.replace('-', '') === normalized);
-    if (!room) return false;
-    setActiveRoom(room);
-    setView('room');
-    return true;
+  const handleJoinByCode = useCallback((input: string): boolean => {
+    const trimmed = input.trim();
+
+    // 1. Try local rooms by short code (creator on same device)
+    const normalized = trimmed.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const local = rooms.find(r => r.code.replace('-', '') === normalized);
+    if (local) { setActiveRoom(local); setView('room'); return true; }
+
+    // 2. Try to decode a share code so anyone can join from another device
+    const decoded = decodeShareCode(trimmed);
+    if (decoded) {
+      // Re-use if we already have this room locally
+      const existing = rooms.find(r => r.code === decoded.code);
+      if (existing) { setActiveRoom(existing); setView('room'); return true; }
+
+      // Otherwise create a local copy from the encoded metadata
+      const newRoom: StudyRoom = {
+        id: `room-${Date.now()}`,
+        name: decoded.name,
+        subject: decoded.subject,
+        code: decoded.code,
+        participants: [],
+        messages: [],
+        maxCapacity: decoded.maxCapacity,
+        createdAt: Date.now(),
+      };
+      setRooms(prev => [...prev, newRoom]);
+      setActiveRoom(newRoom);
+      setView('room');
+      return true;
+    }
+
+    return false;
   }, [rooms]);
 
   const handleLeaveRoom = useCallback(() => {
