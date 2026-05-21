@@ -11,7 +11,8 @@ import { formatShortDuration } from '../utils/time';
 interface Props {
   room: StudyRoomType;
   currentUser: UserProfile;
-  onLeave: (sessionMs: number) => void;
+  onLeave: () => void;
+  onSessionConfirmed: (ms: number) => void;
 }
 
 type Panel = 'timer' | 'people' | 'chat' | 'ranks';
@@ -143,7 +144,7 @@ function RoomLeaderboard({
   );
 }
 
-export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: Props) {
+export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onSessionConfirmed }: Props) {
   const [activePanel, setActivePanel] = useState<Panel>('timer');
   const [rightTab, setRightTab] = useState<RightTab>('people');
   const [messages, setMessages] = useState<ChatMessage[]>(initialRoom.messages);
@@ -157,9 +158,9 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       joinedAt: Date.now(),
       startedAt: Date.now(),
       isActive: true,
-      weeklyMs: 0,
-      monthlyMs: 0,
-      totalMs: 0,
+      weeklyMs: currentUser.weeklyMs,
+      monthlyMs: currentUser.monthlyMs,
+      totalMs: currentUser.totalMs,
     };
     return [me, ...initialRoom.participants];
   });
@@ -209,8 +210,9 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       timestamp: Date.now(),
     }]);
 
+    onSessionConfirmed(ms);
     setPendingSessionMs(null);
-  }, [pendingSessionMs, currentUser]);
+  }, [pendingSessionMs, currentUser, onSessionConfirmed]);
 
   const mobileTabs: { id: Panel; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'timer', label: 'Timer', icon: <Clock size={14} /> },
@@ -230,7 +232,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       {/* Header */}
       <header className="glass border-b border-border px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button
-          onClick={() => onLeave(sessionDuration)}
+          onClick={onLeave}
           className="text-text-muted hover:text-text-primary transition-colors p-1.5 rounded-lg hover:bg-bg-elevated"
         >
           <ArrowLeft size={18} />
