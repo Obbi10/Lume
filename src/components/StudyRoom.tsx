@@ -246,7 +246,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
   ];
 
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col">
+    <div className="h-dvh bg-bg-primary flex flex-col overflow-hidden">
       <header className="glass border-b border-border px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={onLeave} className="text-text-muted hover:text-text-primary transition-colors p-1.5 rounded-lg hover:bg-bg-elevated">
           <ArrowLeft size={18} />
@@ -275,7 +275,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {!isMobile ? (
           <>
             <div className="flex-1 flex flex-col items-center justify-center p-8 border-r border-border">
@@ -336,32 +336,20 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col">
-            <div className="flex border-b border-border bg-bg-secondary">
-              {mobileTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActivePanel(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-1 py-3 text-xs font-medium transition-all relative ${
-                    activePanel === tab.id ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  {tab.icon}
-                  <span className="hidden xs:inline">{tab.label}</span>
-                  {tab.badge !== undefined && (
-                    <span className="bg-accent/20 text-accent text-[9px] px-1 py-0.5 rounded-full">{tab.badge}</span>
-                  )}
-                  {activePanel === tab.id && (
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-accent rounded-full" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex-1 overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col">
+            {/* Content — fills all space above the tab bar */}
+            <div className="flex-1 min-h-0 overflow-hidden">
               {activePanel === 'timer' && (
                 <div className="flex flex-col items-center justify-center p-8 h-full animate-fade-in">
                   <Timer onSessionEnd={handleSessionEnd} />
+                  {sessionDuration > 0 && (
+                    <div className="mt-6 text-center">
+                      <p className="text-text-muted text-xs">Session total</p>
+                      <p className="text-accent font-mono text-lg mt-0.5">
+                        {Math.floor(sessionDuration / 3600000)}h {Math.floor((sessionDuration % 3600000) / 60000)}m
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
               {activePanel === 'ranks' && (
@@ -383,6 +371,27 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
                   <ChatBox messages={messages} currentUser={currentUser} onSend={handleSendMessage} />
                 </div>
               )}
+            </div>
+
+            {/* Tab bar — pinned to bottom */}
+            <div className="flex flex-shrink-0 border-t border-border bg-bg-secondary">
+              {mobileTabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActivePanel(tab.id)}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-xs font-medium transition-all relative ${
+                    activePanel === tab.id ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {tab.icon}
+                  <span className="text-[10px]">{tab.label}</span>
+                  {tab.badge !== undefined && tab.badge > 0 && (
+                    <span className="absolute top-1.5 right-[calc(50%-18px)] bg-accent text-bg-primary text-[9px] px-1 rounded-full leading-tight">
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         )}
