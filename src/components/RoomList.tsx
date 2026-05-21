@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import type { StudyRoom, UserProfile } from '../types';
 import AbstractAvatar from './AbstractAvatar';
-import { Users, ArrowRight, Plus, BookOpen, Flame, Clock } from 'lucide-react';
+import { Users, ArrowRight, Plus, BookOpen, Flame, Clock, Copy, Check, Hash } from 'lucide-react';
 
 interface Props {
   rooms: StudyRoom[];
   currentUser: UserProfile;
   todayMs: number;
   onJoin: (room: StudyRoom) => void;
+  onJoinByCode: (code: string) => boolean;
   onViewProfile: () => void;
   onCreateRoom: () => void;
 }
@@ -22,16 +24,24 @@ function formatTodayTime(ms: number): string {
 }
 
 function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
+  const [copied, setCopied] = useState(false);
   const isFull = room.participants.length >= room.maxCapacity;
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(room.code).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="glass rounded-2xl p-5 border border-border hover:border-accent/30 transition-all group animate-fade-in hover:glow-blue">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-text-primary font-semibold text-sm">{room.name}</h3>
+      <div className="flex items-start justify-between mb-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-text-primary font-semibold text-sm truncate">{room.name}</h3>
           <span className="text-accent/70 text-xs">{room.subject}</span>
         </div>
-        <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${
+        <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border flex-shrink-0 ml-2 ${
           isFull
             ? 'border-red-500/30 text-red-400 bg-red-500/5'
             : 'border-green-500/30 text-green-400 bg-green-500/5'
@@ -39,6 +49,20 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
           <span className={`w-1.5 h-1.5 rounded-full ${isFull ? 'bg-red-400' : 'bg-green-400 live-dot'}`} />
           {isFull ? 'Full' : 'Open'}
         </div>
+      </div>
+
+      {/* Room code row */}
+      <div className="flex items-center gap-2 mb-3 bg-bg-elevated border border-border rounded-xl px-3 py-2">
+        <Hash size={11} className="text-text-muted flex-shrink-0" />
+        <span className="text-accent font-mono text-sm tracking-widest flex-1">{room.code}</span>
+        <button
+          onClick={handleCopy}
+          className={`flex items-center gap-1 text-xs transition-colors flex-shrink-0 ${
+            copied ? 'text-green-400' : 'text-text-muted hover:text-accent'
+          }`}
+        >
+          {copied ? <><Check size={11} /> copied</> : <><Copy size={11} /> copy</>}
+        </button>
       </div>
 
       {/* Participants row */}
@@ -49,12 +73,15 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
               key={p.id}
               seed={p.artSeed}
               colors={p.artColors}
-              size={28}
+              size={26}
               className="ring-2 ring-bg-primary"
             />
           ))}
+          {room.participants.length === 0 && (
+            <span className="text-text-muted text-xs italic">No one here yet</span>
+          )}
           {room.participants.length > 5 && (
-            <div className="w-7 h-7 rounded-full bg-bg-elevated border-2 border-bg-primary flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full bg-bg-elevated border-2 border-bg-primary flex items-center justify-center">
               <span className="text-[9px] text-text-muted">+{room.participants.length - 5}</span>
             </div>
           )}
@@ -65,31 +92,41 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
         </div>
       </div>
 
-      {/* Subjects cloud */}
-      <div className="flex flex-wrap gap-1 mb-4">
-        {Array.from(new Set(room.participants.flatMap(p => p.subjects))).slice(0, 4).map(s => (
-          <span key={s} className="text-[10px] text-text-muted bg-bg-elevated px-2 py-0.5 rounded-full border border-border">
-            {s}
-          </span>
-        ))}
-      </div>
-
       <button
         onClick={onJoin}
         disabled={isFull}
         className={`w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
           isFull
             ? 'bg-bg-elevated text-text-muted cursor-not-allowed'
-            : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent hover:text-bg-primary group-hover:shadow-accent'
+            : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent hover:text-bg-primary'
         }`}
       >
-        {isFull ? 'Room Full' : <>Join Room <ArrowRight size={14} /></>}
+        {isFull ? 'Room Full' : <>Enter Room <ArrowRight size={14} /></>}
       </button>
     </div>
   );
 }
 
-export default function RoomList({ rooms, currentUser, todayMs, onJoin, onViewProfile, onCreateRoom }: Props) {
+export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinByCode, onViewProfile, onCreateRoom }: Props) {
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
+
+  const handleJoinCode = () => {
+    const trimmed = codeInput.trim();
+    if (trimmed.length < 6) { setCodeError('Enter a valid 6-character code'); return; }
+    const found = onJoinByCode(trimmed);
+    if (!found) {
+      setCodeError('Room not found — check the code and try again');
+    }
+  };
+
+  const handleCodeChange = (val: string) => {
+    // Auto-format as XXX-XXX
+    const clean = val.replace(/[^A-Z0-9]/gi, '').toUpperCase().slice(0, 6);
+    setCodeInput(clean.length > 3 ? `${clean.slice(0, 3)}-${clean.slice(3)}` : clean);
+    setCodeError('');
+  };
+
   return (
     <div className="min-h-screen bg-bg-primary flex flex-col">
       {/* Header */}
@@ -115,7 +152,7 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onViewPr
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="text-text-primary text-2xl font-bold">Study Rooms</h1>
-            <p className="text-text-muted text-sm mt-0.5">Find your focus, join a room</p>
+            <p className="text-text-muted text-sm mt-0.5">Enter a code to join, or create your own</p>
           </div>
           <button
             onClick={onCreateRoom}
@@ -128,7 +165,6 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onViewPr
 
         {/* Stats banner */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          {/* Streak */}
           <div className="glass border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-orange-500/30 transition-colors group">
             <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-500/15 transition-colors">
               <Flame size={18} className="text-orange-400" />
@@ -136,9 +172,7 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onViewPr
             <div className="min-w-0">
               <div className="flex items-baseline gap-1.5">
                 <span className="text-text-primary text-2xl font-bold leading-none">{currentUser.streak}</span>
-                <span className="text-text-muted text-xs">
-                  {currentUser.streak === 1 ? 'day' : 'days'}
-                </span>
+                <span className="text-text-muted text-xs">{currentUser.streak === 1 ? 'day' : 'days'}</span>
               </div>
               <p className="text-text-muted text-xs mt-0.5">
                 {currentUser.streak >= 7 ? '🔥 on fire' : currentUser.streak >= 3 ? 'great streak' : 'current streak'}
@@ -146,16 +180,13 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onViewPr
             </div>
           </div>
 
-          {/* Today */}
           <div className="glass border border-border rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-accent/30 transition-colors group">
             <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0 group-hover:bg-accent/15 transition-colors">
               <Clock size={18} className="text-accent" />
             </div>
             <div className="min-w-0">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-text-primary text-2xl font-bold leading-none">
-                  {formatTodayTime(todayMs)}
-                </span>
+                <span className="text-text-primary text-2xl font-bold leading-none">{formatTodayTime(todayMs)}</span>
               </div>
               <p className="text-text-muted text-xs mt-0.5">
                 {todayMs === 0 ? 'nothing yet today' : todayMs < 1800000 ? 'good start' : todayMs < 7200000 ? 'solid session' : 'great work today'}
@@ -164,11 +195,49 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onViewPr
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          {rooms.map(room => (
-            <RoomCard key={room.id} room={room} onJoin={() => onJoin(room)} />
-          ))}
+        {/* Join by code */}
+        <div className="glass border border-border rounded-2xl p-5 mb-6">
+          <p className="text-text-muted text-xs uppercase tracking-wider mb-3">Join a Room</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={codeInput}
+              onChange={e => handleCodeChange(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleJoinCode()}
+              placeholder="ABC-123"
+              maxLength={7}
+              className="flex-1 bg-bg-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder-text-muted text-sm focus:border-accent/50 transition-colors font-mono tracking-widest uppercase"
+            />
+            <button
+              onClick={handleJoinCode}
+              className="bg-accent text-bg-primary px-5 py-3 rounded-xl text-sm font-semibold hover:bg-accent/90 transition-all glow-blue flex items-center gap-2"
+            >
+              Join
+              <ArrowRight size={15} />
+            </button>
+          </div>
+          {codeError && <p className="text-red-400 text-xs mt-2">{codeError}</p>}
         </div>
+
+        {/* Room list */}
+        {rooms.length === 0 ? (
+          <div className="text-center py-16 text-text-muted">
+            <div className="w-14 h-14 rounded-2xl bg-bg-elevated border border-border flex items-center justify-center mx-auto mb-4">
+              <BookOpen size={22} className="text-text-muted/50" />
+            </div>
+            <p className="text-sm font-medium text-text-secondary">No rooms yet</p>
+            <p className="text-xs mt-1">Create a room or enter a code above to join one</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-text-muted text-xs uppercase tracking-wider mb-3">Your Rooms</p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              {rooms.map(room => (
+                <RoomCard key={room.id} room={room} onJoin={() => onJoin(room)} />
+              ))}
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

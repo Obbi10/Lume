@@ -240,9 +240,12 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
 
         <div className="flex-1 min-w-0">
           <h2 className="text-text-primary font-semibold text-sm truncate">{initialRoom.name}</h2>
-          <div className="flex items-center gap-2 text-text-muted text-xs">
-            <span className="w-1.5 h-1.5 bg-green-400 rounded-full live-dot inline-block" />
-            <span>{participants.length} studying now</span>
+          <div className="flex items-center gap-3 text-text-muted text-xs">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-green-400 rounded-full live-dot inline-block" />
+              {participants.length} studying now
+            </span>
+            <span className="text-accent/60 font-mono tracking-widest">{initialRoom.code}</span>
           </div>
         </div>
 

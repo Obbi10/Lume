@@ -39,6 +39,7 @@ export interface StudyRoom {
   id: string;
   name: string;
   subject: string;
+  code: string;
   participants: Participant[];
   maxCapacity: number;
   messages: ChatMessage[];

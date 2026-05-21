@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { View, UserProfile, StudyRoom } from './types';
-import { generateMockRooms } from './utils/mockData';
 import Onboarding from './components/Onboarding';
 import RoomList from './components/RoomList';
 import StudyRoomComponent from './components/StudyRoom';
@@ -37,7 +36,7 @@ function saveTodayMs(ms: number) {
 export default function App() {
   const [view, setView]         = useState<View>(() => loadProfile() ? 'rooms' : 'onboarding');
   const [profile, setProfile]   = useState<UserProfile | null>(loadProfile);
-  const [rooms, setRooms]       = useState<StudyRoom[]>(generateMockRooms);
+  const [rooms, setRooms]       = useState<StudyRoom[]>([]);
   const [activeRoom, setActiveRoom] = useState<StudyRoom | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [todayMs, setTodayMs]   = useState<number>(loadTodayMs);
@@ -56,6 +55,15 @@ export default function App() {
     setActiveRoom(room);
     setView('room');
   }, []);
+
+  const handleJoinByCode = useCallback((code: string): boolean => {
+    const normalized = code.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    const room = rooms.find(r => r.code.replace('-', '') === normalized);
+    if (!room) return false;
+    setActiveRoom(room);
+    setView('room');
+    return true;
+  }, [rooms]);
 
   const handleLeaveRoom = useCallback(() => {
     setActiveRoom(null);
@@ -110,6 +118,7 @@ export default function App() {
           currentUser={profile}
           todayMs={todayMs}
           onJoin={handleJoinRoom}
+          onJoinByCode={handleJoinByCode}
           onViewProfile={() => setView('profile')}
           onCreateRoom={() => setShowCreateModal(true)}
         />

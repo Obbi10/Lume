@@ -38,6 +38,13 @@ const CHAT_SAMPLES = [
   'stay strong 💪',
 ];
 
+function seededCode(rand: () => number): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let s = '';
+  for (let i = 0; i < 6; i++) s += chars[Math.floor(rand() * chars.length)];
+  return `${s.slice(0, 3)}-${s.slice(3)}`;
+}
+
 function seededRng(seed: number) {
   let s = seed;
   return () => {
@@ -147,6 +154,7 @@ export function generateMockRooms(): StudyRoom[] {
       id: `room-${ri}`,
       name: r.name,
       subject: r.subject,
+      code: seededCode(rand),
       participants,
       maxCapacity: 10,
       messages,
