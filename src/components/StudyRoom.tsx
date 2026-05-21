@@ -4,6 +4,7 @@ import Timer from './Timer';
 import ChatBox from './ChatBox';
 import ParticipantCard from './ParticipantCard';
 import AbstractAvatar from './AbstractAvatar';
+import SessionCompleteModal from './SessionCompleteModal';
 import { ArrowLeft, Users, MessageSquare, Clock, Trophy } from 'lucide-react';
 import { formatShortDuration } from '../utils/time';
 
@@ -146,7 +147,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
   const [activePanel, setActivePanel] = useState<Panel>('timer');
   const [rightTab, setRightTab] = useState<RightTab>('people');
   const [messages, setMessages] = useState<ChatMessage[]>(initialRoom.messages);
-  const [participants] = useState<Participant[]>(() => {
+  const [participants, setParticipants] = useState<Participant[]>(() => {
     const me: Participant = {
       id: currentUser.id,
       name: currentUser.name,
@@ -163,6 +164,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
     return [me, ...initialRoom.participants];
   });
   const [sessionDuration, setSessionDuration] = useState(0);
+  const [pendingSessionMs, setPendingSessionMs] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   useEffect(() => {
@@ -183,7 +185,22 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
   }, [currentUser]);
 
   const handleSessionEnd = useCallback((durationMs: number) => {
-    setSessionDuration(prev => prev + durationMs);
+    if (durationMs > 0) setPendingSessionMs(durationMs);
+  }, []);
+
+  const handleConfirmSession = useCallback(() => {
+    if (pendingSessionMs === null) return;
+    const ms = pendingSessionMs;
+
+    setSessionDuration(prev => prev + ms);
+
+    // Update current user's leaderboard totals in this room
+    setParticipants(prev => prev.map(p =>
+      p.id === currentUser.id
+        ? { ...p, weeklyMs: p.weeklyMs + ms, monthlyMs: p.monthlyMs + ms, totalMs: p.totalMs + ms }
+        : p
+    ));
+
     setMessages(prev => [...prev, {
       id: `msg-sys-${Date.now()}`,
       userId: 'system',
@@ -191,7 +208,9 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       text: `${currentUser.name.split(' ')[0]} finished a session 🎉`,
       timestamp: Date.now(),
     }]);
-  }, [currentUser]);
+
+    setPendingSessionMs(null);
+  }, [pendingSessionMs, currentUser]);
 
   const mobileTabs: { id: Panel; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'timer', label: 'Timer', icon: <Clock size={14} /> },
@@ -356,6 +375,13 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
           </div>
         )}
       </div>
+
+      {pendingSessionMs !== null && (
+        <SessionCompleteModal
+          durationMs={pendingSessionMs}
+          onConfirm={handleConfirmSession}
+        />
+      )}
     </div>
   );
 }
