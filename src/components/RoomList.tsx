@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { StudyRoom, UserProfile } from '../types';
 import { generateShareCode } from '../utils/roomCode';
 import AbstractAvatar from './AbstractAvatar';
+import LumeLogo from './LumeLogo';
 import { Users, ArrowRight, Plus, BookOpen, Flame, Clock, Copy, Check, Hash } from 'lucide-react';
 
 interface Props {
@@ -131,7 +132,7 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinBy
       {/* Header */}
       <header className="glass border-b border-border px-6 py-4 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <span className="text-accent text-xl font-bold tracking-tight">lume</span>
+          <LumeLogo size={28} showText horizontal textClassName="text-xl" />
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-text-muted bg-bg-elevated border border-border px-3 py-1.5 rounded-full">
             <BookOpen size={11} />
             Study Rooms

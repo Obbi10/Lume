@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { UserProfile } from '../types';
 import { generateArtSeed, generateArtColors } from '../utils/artGen';
 import AbstractAvatar from './AbstractAvatar';
+import LumeLogo from './LumeLogo';
 import { Plus, X, ArrowRight } from 'lucide-react';
 
 const SUBJECT_SUGGESTIONS = [
@@ -63,8 +64,8 @@ export default function Onboarding({ onComplete }: Props) {
       <div className="w-full max-w-md animate-slide-up">
         {/* Logo */}
         <div className="text-center mb-10">
-          <span className="text-accent text-4xl font-bold tracking-tight">lume</span>
-          <p className="text-text-muted text-sm mt-1">study together, stay focused</p>
+          <LumeLogo size={56} showText textClassName="text-4xl mt-1" />
+          <p className="text-text-muted text-sm mt-2">study together, stay focused</p>
         </div>
 
         <div className="glass rounded-2xl p-8">
