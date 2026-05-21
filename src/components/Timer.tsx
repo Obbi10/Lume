@@ -4,6 +4,14 @@ import { formatDuration } from '../utils/time';
 import { Play, Pause, Square, ChevronUp, ChevronDown } from 'lucide-react';
 
 const PRESET_MINUTES = [25, 45, 60, 90, 120];
+const STORAGE_KEY = 'lume_timer_state';
+
+interface SavedState {
+  startedAt: number;
+  accumulated: number;
+  mode: TimerMode;
+  target: number;
+}
 
 interface Props {
   onSessionEnd?: (durationMs: number) => void;
@@ -12,72 +20,162 @@ interface Props {
 export default function Timer({ onSessionEnd }: Props) {
   const [mode, setMode] = useState<TimerMode>('stopwatch');
   const [isRunning, setIsRunning] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
   const [target, setTarget] = useState(25 * 60 * 1000);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [customMinutes, setCustomMinutes] = useState(25);
   const [showCustom, setShowCustom] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const elapsedRef = useRef(0);
+  // displayMs = elapsed time (0→∞ stopwatch, 0→target countdown)
+  const [displayMs, setDisplayMs] = useState(0);
 
+  // All timing data in refs — no stale-closure issues inside callbacks
+  const startedAtRef   = useRef<number | null>(null);
+  const accumulatedRef = useRef(0);
+  const intervalRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isRunningRef   = useRef(false);
+  const modeRef        = useRef<TimerMode>('stopwatch');
+  const targetRef      = useRef(25 * 60 * 1000);
+  const onEndRef       = useRef(onSessionEnd);
+
+  useEffect(() => { onEndRef.current = onSessionEnd; }, [onSessionEnd]);
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+  const getElapsed = useCallback((): number => {
+    if (startedAtRef.current === null) return accumulatedRef.current;
+    return accumulatedRef.current + (Date.now() - startedAtRef.current);
+  }, []);
+
+  const saveToStorage = useCallback(() => {
+    if (startedAtRef.current === null) return;
+    const state: SavedState = {
+      startedAt:   startedAtRef.current,
+      accumulated: accumulatedRef.current,
+      mode:        modeRef.current,
+      target:      targetRef.current,
+    };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, []);
+
+  const clearStorage = () => sessionStorage.removeItem(STORAGE_KEY);
+
+  // ── tick ─────────────────────────────────────────────────────────────────
   const tick = useCallback(() => {
-    if (startedAt === null) return;
-    const now = Date.now();
-    const newElapsed = elapsedRef.current + (now - startedAt);
-    setElapsed(newElapsed);
+    const elapsed = getElapsed();
 
-    if (mode === 'countdown' && newElapsed >= target) {
-      setElapsed(target);
-      setIsRunning(false);
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      onSessionEnd?.(target);
+    if (modeRef.current === 'countdown') {
+      setDisplayMs(Math.min(elapsed, targetRef.current));
+
+      if (elapsed >= targetRef.current) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        accumulatedRef.current = 0;
+        startedAtRef.current   = null;
+        isRunningRef.current   = false;
+        clearStorage();
+        setIsRunning(false);
+        setDisplayMs(0);
+        onEndRef.current?.(targetRef.current);
+      }
+    } else {
+      setDisplayMs(elapsed);
     }
-  }, [startedAt, mode, target, onSessionEnd]);
+  }, [getElapsed]);
 
+  // ── restore saved session on mount ───────────────────────────────────────
+  useEffect(() => {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const saved: SavedState = JSON.parse(raw);
+      accumulatedRef.current = saved.accumulated;
+      startedAtRef.current   = saved.startedAt;
+      modeRef.current        = saved.mode;
+      targetRef.current      = saved.target;
+      setMode(saved.mode);
+      setTarget(saved.target);
+      setCustomMinutes(Math.round(saved.target / 60000));
+      isRunningRef.current = true;
+      setIsRunning(true);
+    } catch {
+      clearStorage();
+    }
+  // run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── start / stop interval ────────────────────────────────────────────────
   useEffect(() => {
     if (isRunning) {
-      setStartedAt(Date.now());
+      isRunningRef.current = true;
+      if (startedAtRef.current === null) startedAtRef.current = Date.now();
+      saveToStorage();
+      tick(); // immediate display sync
       intervalRef.current = setInterval(tick, 500);
     } else {
+      isRunningRef.current = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
-      if (startedAt !== null) {
-        elapsedRef.current = elapsed;
-        setStartedAt(null);
+      if (startedAtRef.current !== null) {
+        accumulatedRef.current = getElapsed();
+        startedAtRef.current   = null;
       }
+      clearStorage();
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning]);
 
+  // ── re-sync interval when tick changes (target / mode changed mid-run) ───
   useEffect(() => {
-    if (isRunning) {
+    if (isRunningRef.current) {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(tick, 500);
     }
   }, [tick]);
 
+  // ── immediately recalculate when tab becomes visible ─────────────────────
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && isRunningRef.current) tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [tick]);
+
+  // ── controls ─────────────────────────────────────────────────────────────
   const handleStart = () => setIsRunning(true);
   const handlePause = () => setIsRunning(false);
 
   const handleStop = () => {
+    const finalElapsed = getElapsed();
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    accumulatedRef.current = 0;
+    startedAtRef.current   = null;
+    isRunningRef.current   = false;
+    clearStorage();
     setIsRunning(false);
-    const finalElapsed = elapsed;
-    setElapsed(0);
-    elapsedRef.current = 0;
-    if (finalElapsed > 1000) onSessionEnd?.(finalElapsed);
+    setDisplayMs(0);
+    if (finalElapsed > 1000) onEndRef.current?.(finalElapsed);
   };
 
   const handleModeSwitch = (m: TimerMode) => {
     if (isRunning) return;
+    modeRef.current        = m;
+    accumulatedRef.current = 0;
+    startedAtRef.current   = null;
     setMode(m);
-    setElapsed(0);
-    elapsedRef.current = 0;
+    setDisplayMs(0);
   };
 
-  const displayMs = mode === 'countdown' ? Math.max(0, target - elapsed) : elapsed;
-  const progress = mode === 'countdown' ? elapsed / target : 0;
+  const handleTargetChange = (ms: number) => {
+    targetRef.current      = ms;
+    accumulatedRef.current = 0;
+    startedAtRef.current   = null;
+    setTarget(ms);
+    setDisplayMs(0);
+  };
 
+  // ── derived display values ────────────────────────────────────────────────
+  const shownMs       = mode === 'countdown' ? Math.max(0, target - displayMs) : displayMs;
+  const progress      = mode === 'countdown' ? displayMs / target : 0;
   const circumference = 2 * Math.PI * 54;
-  const dashOffset = circumference * (1 - progress);
+  const dashOffset    = circumference * (1 - Math.min(1, progress));
 
   return (
     <div className="flex flex-col items-center">
@@ -119,7 +217,7 @@ export default function Timer({ onSessionEnd }: Props) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="timer-display text-2xl font-medium text-text-primary">
-            {formatDuration(displayMs)}
+            {formatDuration(shownMs)}
           </span>
           {mode === 'stopwatch' && isRunning && (
             <span className="text-accent text-xs mt-0.5 live-dot">●</span>
@@ -134,7 +232,7 @@ export default function Timer({ onSessionEnd }: Props) {
             {PRESET_MINUTES.map(m => (
               <button
                 key={m}
-                onClick={() => { setTarget(m * 60 * 1000); setElapsed(0); elapsedRef.current = 0; setCustomMinutes(m); }}
+                onClick={() => { handleTargetChange(m * 60 * 1000); setCustomMinutes(m); }}
                 className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
                   target === m * 60 * 1000
                     ? 'border-accent bg-accent/10 text-accent'
@@ -157,7 +255,7 @@ export default function Timer({ onSessionEnd }: Props) {
           {showCustom && (
             <div className="flex items-center justify-center gap-3 animate-fade-in">
               <button
-                onClick={() => { const n = Math.max(1, customMinutes - 5); setCustomMinutes(n); setTarget(n * 60 * 1000); }}
+                onClick={() => { const n = Math.max(1, customMinutes - 5); setCustomMinutes(n); handleTargetChange(n * 60 * 1000); }}
                 className="text-text-muted hover:text-accent transition-colors"
               >
                 <ChevronDown size={16} />
@@ -166,7 +264,7 @@ export default function Timer({ onSessionEnd }: Props) {
                 {customMinutes} min
               </span>
               <button
-                onClick={() => { const n = Math.min(300, customMinutes + 5); setCustomMinutes(n); setTarget(n * 60 * 1000); }}
+                onClick={() => { const n = Math.min(300, customMinutes + 5); setCustomMinutes(n); handleTargetChange(n * 60 * 1000); }}
                 className="text-text-muted hover:text-accent transition-colors"
               >
                 <ChevronUp size={16} />
@@ -184,7 +282,7 @@ export default function Timer({ onSessionEnd }: Props) {
             className="flex items-center gap-2 bg-accent text-bg-primary px-6 py-2.5 rounded-full text-sm font-semibold hover:bg-accent/90 transition-all glow-blue hover:glow-blue-lg"
           >
             <Play size={16} fill="currentColor" />
-            {elapsed > 0 ? 'Resume' : 'Start'}
+            {displayMs > 0 ? 'Resume' : 'Start'}
           </button>
         ) : (
           <button
@@ -196,7 +294,7 @@ export default function Timer({ onSessionEnd }: Props) {
           </button>
         )}
 
-        {(elapsed > 0 || isRunning) && (
+        {(displayMs > 0 || isRunning) && (
           <button
             onClick={handleStop}
             className="flex items-center gap-2 bg-bg-elevated border border-border text-text-muted px-4 py-2.5 rounded-full text-sm hover:border-red-500/40 hover:text-red-400 transition-all"
