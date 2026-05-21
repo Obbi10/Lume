@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import type { UserProfile } from '../types';
 import { generateArtSeed, generateArtColors } from '../utils/artGen';
 import AbstractAvatar from './AbstractAvatar';
-import { Plus, X, RefreshCw, ArrowRight } from 'lucide-react';
+import { Plus, X, ArrowRight } from 'lucide-react';
 
 const SUBJECT_SUGGESTIONS = [
   'Mathematics', 'Physics', 'Chemistry', 'Biology',
@@ -19,16 +19,10 @@ export default function Onboarding({ onComplete }: Props) {
   const [name, setName] = useState('');
   const [subjects, setSubjects] = useState<string[]>([]);
   const [subjectInput, setSubjectInput] = useState('');
-  const [seed, setSeed] = useState(() => generateArtSeed());
-  const [colors, setColors] = useState(() => generateArtColors(generateArtSeed()));
+  const [seed] = useState(() => generateArtSeed());
+  const [colors] = useState(() => generateArtColors(seed));
   const [step, setStep] = useState(0);
   const [error, setError] = useState('');
-
-  const regenArt = useCallback(() => {
-    const s = generateArtSeed();
-    setSeed(s);
-    setColors(generateArtColors(s));
-  }, []);
 
   const addSubject = (subj: string) => {
     const trimmed = subj.trim();
@@ -152,16 +146,8 @@ export default function Onboarding({ onComplete }: Props) {
               <p className="text-text-muted text-sm mb-6">Unique abstract art, just for you</p>
 
               <div className="flex flex-col items-center gap-4">
-                <div className="relative">
-                  <AbstractAvatar seed={seed} colors={colors} size={120} className="ring-2 ring-accent/30 glow-blue" />
-                </div>
-                <button
-                  onClick={regenArt}
-                  className="flex items-center gap-2 text-sm text-text-secondary hover:text-accent transition-colors bg-bg-elevated border border-border px-4 py-2 rounded-full"
-                >
-                  <RefreshCw size={14} />
-                  Generate another
-                </button>
+                <AbstractAvatar seed={seed} colors={colors} size={120} className="ring-2 ring-accent/30 glow-blue" />
+                <p className="text-text-muted text-xs text-center">This is your unique avatar — no two are alike</p>
                 <div className="text-center">
                   <p className="text-text-primary font-medium">{name}</p>
                   <div className="flex flex-wrap justify-center gap-1 mt-2">

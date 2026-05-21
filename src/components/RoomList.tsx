@@ -1,14 +1,10 @@
-import { useState } from 'react';
-import type { StudyRoom, UserProfile, LeaderboardEntry } from '../types';
+import type { StudyRoom, UserProfile } from '../types';
 import AbstractAvatar from './AbstractAvatar';
-import Leaderboard from './Leaderboard';
-import { Users, ArrowRight, Plus, BookOpen, Trophy } from 'lucide-react';
+import { Users, ArrowRight, Plus, BookOpen } from 'lucide-react';
 
 interface Props {
   rooms: StudyRoom[];
   currentUser: UserProfile;
-  leaderboard: LeaderboardEntry[];
-  currentUserSessionMs: number;
   onJoin: (room: StudyRoom) => void;
   onViewProfile: () => void;
   onCreateRoom: () => void;
@@ -82,12 +78,7 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
   );
 }
 
-export default function RoomList({
-  rooms, currentUser, leaderboard, currentUserSessionMs,
-  onJoin, onViewProfile, onCreateRoom,
-}: Props) {
-  const [showLeaderboardMobile, setShowLeaderboardMobile] = useState(false);
-
+export default function RoomList({ rooms, currentUser, onJoin, onViewProfile, onCreateRoom }: Props) {
   return (
     <div className="min-h-screen bg-bg-primary flex flex-col">
       {/* Header */}
@@ -100,76 +91,34 @@ export default function RoomList({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Mobile leaderboard toggle */}
-          <button
-            onClick={() => setShowLeaderboardMobile(!showLeaderboardMobile)}
-            className={`lg:hidden flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all ${
-              showLeaderboardMobile
-                ? 'border-accent/40 text-accent bg-accent/10'
-                : 'border-border text-text-muted bg-bg-elevated hover:border-accent/30'
-            }`}
-          >
-            <Trophy size={11} />
-            Ranks
-          </button>
-
-          <button onClick={onViewProfile} className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
-            <span className="text-text-secondary text-sm group-hover:text-text-primary transition-colors hidden sm:block">
-              {currentUser.name.split(' ')[0]}
-            </span>
-            <AbstractAvatar seed={currentUser.artSeed} colors={currentUser.artColors} size={32} className="ring-2 ring-border group-hover:ring-accent/40 transition-all" />
-          </button>
-        </div>
+        <button onClick={onViewProfile} className="flex items-center gap-2 hover:opacity-80 transition-opacity group">
+          <span className="text-text-secondary text-sm group-hover:text-text-primary transition-colors">
+            {currentUser.name.split(' ')[0]}
+          </span>
+          <AbstractAvatar seed={currentUser.artSeed} colors={currentUser.artColors} size={32} className="ring-2 ring-border group-hover:ring-accent/40 transition-all" />
+        </button>
       </header>
 
       {/* Content */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
-        <div className="flex gap-6">
-          {/* Left: Rooms */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h1 className="text-text-primary text-2xl font-bold">Study Rooms</h1>
-                <p className="text-text-muted text-sm mt-0.5">Find your focus, join a room</p>
-              </div>
-              <button
-                onClick={onCreateRoom}
-                className="flex items-center gap-2 bg-accent text-bg-primary px-4 py-2 rounded-xl text-sm font-semibold hover:bg-accent/90 transition-all glow-blue hover:glow-blue-lg"
-              >
-                <Plus size={16} />
-                New Room
-              </button>
-            </div>
-
-            {/* Mobile leaderboard (collapsible) */}
-            {showLeaderboardMobile && (
-              <div className="lg:hidden mb-6 animate-slide-up" style={{ height: 420 }}>
-                <Leaderboard
-                  entries={leaderboard}
-                  currentUser={currentUser}
-                  currentUserMs={currentUserSessionMs}
-                />
-              </div>
-            )}
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              {rooms.map(room => (
-                <RoomCard key={room.id} room={room} onJoin={() => onJoin(room)} />
-              ))}
-            </div>
+      <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-text-primary text-2xl font-bold">Study Rooms</h1>
+            <p className="text-text-muted text-sm mt-0.5">Find your focus, join a room</p>
           </div>
+          <button
+            onClick={onCreateRoom}
+            className="flex items-center gap-2 bg-accent text-bg-primary px-4 py-2 rounded-xl text-sm font-semibold hover:bg-accent/90 transition-all glow-blue hover:glow-blue-lg"
+          >
+            <Plus size={16} />
+            New Room
+          </button>
+        </div>
 
-          {/* Right: Leaderboard sidebar (desktop) */}
-          <div className="hidden lg:block w-72 flex-shrink-0">
-            <div className="sticky top-24" style={{ height: 'calc(100vh - 130px)' }}>
-              <Leaderboard
-                entries={leaderboard}
-                currentUser={currentUser}
-                currentUserMs={currentUserSessionMs}
-              />
-            </div>
-          </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {rooms.map(room => (
+            <RoomCard key={room.id} room={room} onJoin={() => onJoin(room)} />
+          ))}
         </div>
       </main>
     </div>

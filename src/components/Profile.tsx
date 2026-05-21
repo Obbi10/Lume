@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { UserProfile } from '../types';
 import AbstractAvatar from './AbstractAvatar';
-import { generateArtSeed, generateArtColors } from '../utils/artGen';
-import { ArrowLeft, RefreshCw, Plus, X, BookOpen, Edit3, Check } from 'lucide-react';
+import { ArrowLeft, Plus, X, BookOpen, Edit3, Check } from 'lucide-react';
 
 const SUBJECT_SUGGESTIONS = [
   'Mathematics', 'Physics', 'Chemistry', 'Biology',
@@ -22,17 +21,7 @@ export default function Profile({ profile, onBack, onUpdate }: Props) {
   const [name, setName] = useState(profile.name);
   const [subjects, setSubjects] = useState<string[]>(profile.subjects);
   const [subjectInput, setSubjectInput] = useState('');
-  const [seed, setSeed] = useState(profile.artSeed);
-  const [colors, setColors] = useState(profile.artColors);
   const [isDirty, setIsDirty] = useState(false);
-
-  const regenArt = () => {
-    const s = generateArtSeed();
-    const c = generateArtColors(s);
-    setSeed(s);
-    setColors(c);
-    setIsDirty(true);
-  };
 
   const addSubject = (s: string) => {
     const trimmed = s.trim();
@@ -55,7 +44,7 @@ export default function Profile({ profile, onBack, onUpdate }: Props) {
   };
 
   const handleSave = () => {
-    onUpdate({ ...profile, name: name.trim(), subjects, artSeed: seed, artColors: colors });
+    onUpdate({ ...profile, name: name.trim(), subjects });
     setIsDirty(false);
   };
 
@@ -83,23 +72,12 @@ export default function Profile({ profile, onBack, onUpdate }: Props) {
 
       <main className="flex-1 max-w-lg mx-auto w-full px-4 py-8 space-y-6">
         {/* Avatar section */}
-        <div className="glass rounded-2xl p-6 border border-border flex flex-col items-center gap-4">
-          <div className="relative">
-            <AbstractAvatar seed={seed} colors={colors} size={100} className="ring-2 ring-accent/30 glow-blue" />
-          </div>
-
-          <button
-            onClick={regenArt}
-            className="flex items-center gap-2 text-sm text-text-secondary hover:text-accent transition-colors bg-bg-elevated border border-border px-4 py-2 rounded-full"
-          >
-            <RefreshCw size={13} />
-            Regenerate avatar
-          </button>
-
-          {/* Colour palette preview */}
+        <div className="glass rounded-2xl p-6 border border-border flex flex-col items-center gap-3">
+          <AbstractAvatar seed={profile.artSeed} colors={profile.artColors} size={100} className="ring-2 ring-accent/30 glow-blue" />
+          <p className="text-text-muted text-xs text-center">Your avatar is unique to you</p>
           <div className="flex gap-2">
-            {colors.map((c, i) => (
-              <div key={i} className="w-5 h-5 rounded-full border border-border/50" style={{ background: c }} />
+            {profile.artColors.map((c, i) => (
+              <div key={i} className="w-4 h-4 rounded-full border border-border/50" style={{ background: c }} />
             ))}
           </div>
         </div>

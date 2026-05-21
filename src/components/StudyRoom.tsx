@@ -4,21 +4,103 @@ import Timer from './Timer';
 import ChatBox from './ChatBox';
 import ParticipantCard from './ParticipantCard';
 import AbstractAvatar from './AbstractAvatar';
-import { ArrowLeft, Users, MessageSquare, Clock } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, Trophy } from 'lucide-react';
+import { formatShortDuration } from '../utils/time';
 
 interface Props {
   room: StudyRoomType;
   currentUser: UserProfile;
-  onLeave: (sessionMs?: number) => void;
+  onLeave: () => void;
 }
 
-type Panel = 'timer' | 'chat' | 'people';
+type Panel = 'timer' | 'people' | 'chat' | 'ranks';
+type RightTab = 'people' | 'chat' | 'ranks';
+
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+function RoomLeaderboard({
+  participants,
+  currentUserId,
+}: {
+  participants: Participant[];
+  currentUserId: string;
+}) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  const sorted = [...participants].sort((a, b) => (now - b.startedAt) - (now - a.startedAt));
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border flex-shrink-0">
+        <Trophy size={12} className="text-accent" />
+        <span className="text-text-muted text-xs uppercase tracking-wider">Room Rankings</span>
+        <span className="ml-auto text-text-muted text-[10px]">by session time</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-2">
+        {sorted.map((p, idx) => {
+          const isCurrentUser = p.id === currentUserId;
+          const elapsed = now - p.startedAt;
+          const rank = idx + 1;
+
+          return (
+            <div
+              key={p.id}
+              className={`flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl mb-0.5 transition-all ${
+                isCurrentUser ? 'bg-accent/8 border border-accent/20' : 'hover:bg-bg-elevated/50'
+              }`}
+            >
+              {/* Rank */}
+              <div className="w-5 flex-shrink-0 text-center">
+                {rank <= 3
+                  ? <span className="text-sm leading-none">{MEDALS[rank - 1]}</span>
+                  : <span className="text-text-muted text-xs font-mono">{rank}</span>
+                }
+              </div>
+
+              <AbstractAvatar
+                seed={p.artSeed}
+                colors={p.artColors}
+                size={30}
+                className={isCurrentUser ? 'ring-2 ring-accent/40' : ''}
+              />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1">
+                  <span className={`text-xs font-medium truncate ${isCurrentUser ? 'text-accent' : 'text-text-primary'}`}>
+                    {p.name.split(' ')[0]}
+                  </span>
+                  {isCurrentUser && (
+                    <span className="text-[9px] text-accent/60 bg-accent/10 px-1 py-0.5 rounded-full flex-shrink-0">you</span>
+                  )}
+                </div>
+                <p className="text-text-muted text-[10px] truncate">{p.subjects.slice(0, 2).join(', ')}</p>
+              </div>
+
+              <div className="flex-shrink-0 text-right">
+                <span className={`text-xs font-mono font-medium ${rank === 1 ? 'text-accent' : 'text-text-secondary'}`}>
+                  {formatShortDuration(elapsed)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: Props) {
   const [activePanel, setActivePanel] = useState<Panel>('timer');
+  const [rightTab, setRightTab] = useState<RightTab>('people');
   const [messages, setMessages] = useState<ChatMessage[]>(initialRoom.messages);
   const [participants] = useState<Participant[]>(() => {
-    const meAsParticipant: Participant = {
+    const me: Participant = {
       id: currentUser.id,
       name: currentUser.name,
       subjects: currentUser.subjects,
@@ -28,7 +110,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       startedAt: Date.now(),
       isActive: true,
     };
-    return [meAsParticipant, ...initialRoom.participants];
+    return [me, ...initialRoom.participants];
   });
   const [sessionDuration, setSessionDuration] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -52,20 +134,26 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
 
   const handleSessionEnd = useCallback((durationMs: number) => {
     setSessionDuration(prev => prev + durationMs);
-    const msg: ChatMessage = {
+    setMessages(prev => [...prev, {
       id: `msg-sys-${Date.now()}`,
       userId: 'system',
       userName: 'lume',
       text: `${currentUser.name.split(' ')[0]} finished a session 🎉`,
       timestamp: Date.now(),
-    };
-    setMessages(prev => [...prev, msg]);
+    }]);
   }, [currentUser]);
 
-  const tabs: { id: Panel; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: 'timer', label: 'Timer', icon: <Clock size={15} /> },
-    { id: 'people', label: 'People', icon: <Users size={15} />, badge: participants.length },
-    { id: 'chat', label: 'Chat', icon: <MessageSquare size={15} />, badge: messages.filter(m => m.userId !== 'system').length },
+  const mobileTabs: { id: Panel; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: 'timer', label: 'Timer', icon: <Clock size={14} /> },
+    { id: 'ranks', label: 'Ranks', icon: <Trophy size={14} /> },
+    { id: 'people', label: 'People', icon: <Users size={14} />, badge: participants.length },
+    { id: 'chat', label: 'Chat', icon: <MessageSquare size={14} /> },
+  ];
+
+  const rightTabs: { id: RightTab; label: string; icon: React.ReactNode }[] = [
+    { id: 'people', label: 'People', icon: <Users size={12} /> },
+    { id: 'ranks', label: 'Ranks', icon: <Trophy size={12} /> },
+    { id: 'chat', label: 'Chat', icon: <MessageSquare size={12} /> },
   ];
 
   return (
@@ -73,7 +161,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       {/* Header */}
       <header className="glass border-b border-border px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button
-          onClick={() => onLeave(sessionDuration)}
+          onClick={onLeave}
           className="text-text-muted hover:text-text-primary transition-colors p-1.5 rounded-lg hover:bg-bg-elevated"
         >
           <ArrowLeft size={18} />
@@ -99,7 +187,6 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
         </div>
       </header>
 
-      {/* Desktop: side-by-side layout */}
       <div className="flex-1 flex overflow-hidden">
         {!isMobile ? (
           <>
@@ -110,7 +197,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
                 <Timer onSessionEnd={handleSessionEnd} />
                 {sessionDuration > 0 && (
                   <div className="mt-6 text-center">
-                    <p className="text-text-muted text-xs">Total session today</p>
+                    <p className="text-text-muted text-xs">Session total</p>
                     <p className="text-accent font-mono text-lg mt-0.5">
                       {Math.floor(sessionDuration / 3600000)}h {Math.floor((sessionDuration % 3600000) / 60000)}m
                     </p>
@@ -119,69 +206,88 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
               </div>
             </div>
 
-            {/* Right: People + Chat stacked */}
+            {/* Right: tabbed panel */}
             <div className="w-72 flex flex-col">
-              {/* People */}
-              <div className="border-b border-border p-3 flex-shrink-0" style={{ maxHeight: '50%', overflowY: 'auto' }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Users size={12} className="text-text-muted" />
-                  <span className="text-text-muted text-xs uppercase tracking-wider">Studying</span>
-                  <span className="ml-auto text-accent text-xs bg-accent/10 px-2 py-0.5 rounded-full">{participants.length}</span>
-                </div>
-                <div className="space-y-1">
-                  {participants.map(p => (
-                    <ParticipantCard key={p.id} participant={p} isCurrentUser={p.id === currentUser.id} />
-                  ))}
-                </div>
+              {/* Tab bar */}
+              <div className="flex border-b border-border bg-bg-secondary flex-shrink-0">
+                {rightTabs.map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setRightTab(tab.id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
+                      rightTab === tab.id ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
+                    }`}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                    {rightTab === tab.id && (
+                      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-accent rounded-full" />
+                    )}
+                  </button>
+                ))}
               </div>
 
-              {/* Chat */}
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="flex items-center gap-2 p-3 border-b border-border flex-shrink-0">
-                  <MessageSquare size={12} className="text-text-muted" />
-                  <span className="text-text-muted text-xs uppercase tracking-wider">Chat</span>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <ChatBox messages={messages} currentUser={currentUser} onSend={handleSendMessage} />
-                </div>
+              {/* Panel content */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {rightTab === 'people' && (
+                  <div className="p-2 overflow-y-auto h-full animate-fade-in">
+                    <div className="space-y-0.5">
+                      {participants.map(p => (
+                        <ParticipantCard key={p.id} participant={p} isCurrentUser={p.id === currentUser.id} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {rightTab === 'ranks' && (
+                  <div className="flex flex-col h-full animate-fade-in">
+                    <RoomLeaderboard participants={participants} currentUserId={currentUser.id} />
+                  </div>
+                )}
+
+                {rightTab === 'chat' && (
+                  <div className="flex flex-col h-full animate-fade-in">
+                    <ChatBox messages={messages} currentUser={currentUser} onSend={handleSendMessage} />
+                  </div>
+                )}
               </div>
             </div>
           </>
         ) : (
-          /* Mobile: tabbed layout */
+          /* Mobile: 4-tab layout */
           <div className="flex-1 flex flex-col">
-            {/* Tab bar */}
             <div className="flex border-b border-border bg-bg-secondary">
-              {tabs.map(tab => (
+              {mobileTabs.map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setActivePanel(tab.id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-all relative ${
-                    activePanel === tab.id
-                      ? 'text-accent'
-                      : 'text-text-muted hover:text-text-secondary'
+                  className={`flex-1 flex items-center justify-center gap-1 py-3 text-xs font-medium transition-all relative ${
+                    activePanel === tab.id ? 'text-accent' : 'text-text-muted hover:text-text-secondary'
                   }`}
                 >
                   {tab.icon}
-                  {tab.label}
+                  <span className="hidden xs:inline">{tab.label}</span>
                   {tab.badge !== undefined && (
-                    <span className="bg-accent/20 text-accent text-[9px] px-1.5 py-0.5 rounded-full">{tab.badge}</span>
+                    <span className="bg-accent/20 text-accent text-[9px] px-1 py-0.5 rounded-full">{tab.badge}</span>
                   )}
                   {activePanel === tab.id && (
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-accent rounded-full" />
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-accent rounded-full" />
                   )}
                 </button>
               ))}
             </div>
 
-            {/* Panel content */}
             <div className="flex-1 overflow-hidden">
               {activePanel === 'timer' && (
                 <div className="flex flex-col items-center justify-center p-8 h-full animate-fade-in">
                   <Timer onSessionEnd={handleSessionEnd} />
                 </div>
               )}
-
+              {activePanel === 'ranks' && (
+                <div className="flex flex-col h-full animate-fade-in">
+                  <RoomLeaderboard participants={participants} currentUserId={currentUser.id} />
+                </div>
+              )}
               {activePanel === 'people' && (
                 <div className="p-4 overflow-y-auto h-full animate-fade-in">
                   <div className="space-y-1">
@@ -191,7 +297,6 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
                   </div>
                 </div>
               )}
-
               {activePanel === 'chat' && (
                 <div className="flex flex-col h-full animate-fade-in">
                   <ChatBox messages={messages} currentUser={currentUser} onSend={handleSendMessage} />

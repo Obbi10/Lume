@@ -1,13 +1,11 @@
 import { useState, useCallback } from 'react';
 import type { View, UserProfile, StudyRoom } from './types';
-import { generateMockRooms, generateMockLeaderboard } from './utils/mockData';
+import { generateMockRooms } from './utils/mockData';
 import Onboarding from './components/Onboarding';
 import RoomList from './components/RoomList';
 import StudyRoomComponent from './components/StudyRoom';
 import Profile from './components/Profile';
 import CreateRoomModal from './components/CreateRoomModal';
-
-const LEADERBOARD = generateMockLeaderboard();
 
 export default function App() {
   const [view, setView] = useState<View>('onboarding');
@@ -15,7 +13,6 @@ export default function App() {
   const [rooms, setRooms] = useState<StudyRoom[]>(generateMockRooms());
   const [activeRoom, setActiveRoom] = useState<StudyRoom | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [totalSessionMs, setTotalSessionMs] = useState(0);
 
   const handleOnboardingComplete = useCallback((p: UserProfile) => {
     setProfile(p);
@@ -27,8 +24,7 @@ export default function App() {
     setView('room');
   }, []);
 
-  const handleLeaveRoom = useCallback((sessionMs?: number) => {
-    if (sessionMs) setTotalSessionMs(prev => prev + sessionMs);
+  const handleLeaveRoom = useCallback(() => {
     setActiveRoom(null);
     setView('rooms');
   }, []);
@@ -61,8 +57,6 @@ export default function App() {
         <RoomList
           rooms={rooms}
           currentUser={profile}
-          leaderboard={LEADERBOARD}
-          currentUserSessionMs={totalSessionMs}
           onJoin={handleJoinRoom}
           onViewProfile={() => setView('profile')}
           onCreateRoom={() => setShowCreateModal(true)}
