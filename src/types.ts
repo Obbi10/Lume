@@ -7,6 +7,7 @@ export interface UserProfile {
   artSeed: number;
   artColors: string[];
   joinedAt: number;
+  streak: number;
 }
 
 export interface ChatMessage {

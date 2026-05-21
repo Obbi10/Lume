@@ -10,7 +10,7 @@ import { formatShortDuration } from '../utils/time';
 interface Props {
   room: StudyRoomType;
   currentUser: UserProfile;
-  onLeave: () => void;
+  onLeave: (sessionMs: number) => void;
 }
 
 type Panel = 'timer' | 'people' | 'chat' | 'ranks';
@@ -211,7 +211,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       {/* Header */}
       <header className="glass border-b border-border px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button
-          onClick={onLeave}
+          onClick={() => onLeave(sessionDuration)}
           className="text-text-muted hover:text-text-primary transition-colors p-1.5 rounded-lg hover:bg-bg-elevated"
         >
           <ArrowLeft size={18} />

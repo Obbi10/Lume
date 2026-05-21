@@ -50,6 +50,7 @@ export default function Onboarding({ onComplete }: Props) {
         artSeed: seed,
         artColors: colors,
         joinedAt: Date.now(),
+        streak: 1,
       });
     }
   };

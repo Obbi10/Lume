@@ -13,6 +13,7 @@ export default function App() {
   const [rooms, setRooms] = useState<StudyRoom[]>(generateMockRooms());
   const [activeRoom, setActiveRoom] = useState<StudyRoom | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [todayMs, setTodayMs] = useState(0);
 
   const handleOnboardingComplete = useCallback((p: UserProfile) => {
     setProfile(p);
@@ -24,7 +25,8 @@ export default function App() {
     setView('room');
   }, []);
 
-  const handleLeaveRoom = useCallback(() => {
+  const handleLeaveRoom = useCallback((sessionMs: number) => {
+    if (sessionMs > 0) setTodayMs(prev => prev + sessionMs);
     setActiveRoom(null);
     setView('rooms');
   }, []);
@@ -57,6 +59,7 @@ export default function App() {
         <RoomList
           rooms={rooms}
           currentUser={profile}
+          todayMs={todayMs}
           onJoin={handleJoinRoom}
           onViewProfile={() => setView('profile')}
           onCreateRoom={() => setShowCreateModal(true)}
