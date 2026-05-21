@@ -18,6 +18,24 @@ type RightTab = 'people' | 'chat' | 'ranks';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
+type Period = 'session' | 'weekly' | 'monthly' | 'total';
+
+const PERIOD_TABS: { id: Period; label: string }[] = [
+  { id: 'session', label: 'Session' },
+  { id: 'weekly', label: 'Week' },
+  { id: 'monthly', label: 'Month' },
+  { id: 'total', label: 'All Time' },
+];
+
+function formatHours(ms: number): string {
+  const totalMinutes = Math.floor(ms / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
 function RoomLeaderboard({
   participants,
   currentUserId,
@@ -25,6 +43,7 @@ function RoomLeaderboard({
   participants: Participant[];
   currentUserId: string;
 }) {
+  const [period, setPeriod] = useState<Period>('session');
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -32,20 +51,49 @@ function RoomLeaderboard({
     return () => clearInterval(id);
   }, []);
 
-  const sorted = [...participants].sort((a, b) => (now - b.startedAt) - (now - a.startedAt));
+  const getMsForPeriod = (p: Participant) => {
+    if (period === 'session') return now - p.startedAt;
+    if (period === 'weekly') return p.weeklyMs;
+    if (period === 'monthly') return p.monthlyMs;
+    return p.totalMs;
+  };
+
+  const sorted = [...participants].sort((a, b) => getMsForPeriod(b) - getMsForPeriod(a));
+  const userRank = sorted.findIndex(p => p.id === currentUserId) + 1;
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-3 pt-3 pb-2 border-b border-border flex-shrink-0">
-        <Trophy size={12} className="text-accent" />
-        <span className="text-text-muted text-xs uppercase tracking-wider">Room Rankings</span>
-        <span className="ml-auto text-text-muted text-[10px]">by session time</span>
+      {/* Header */}
+      <div className="px-3 pt-3 pb-2 border-b border-border flex-shrink-0">
+        <div className="flex items-center gap-2 mb-2.5">
+          <Trophy size={12} className="text-accent" />
+          <span className="text-text-muted text-xs uppercase tracking-wider">Rankings</span>
+          <span className="ml-auto text-accent text-xs bg-accent/10 px-2 py-0.5 rounded-full">#{userRank}</span>
+        </div>
+
+        {/* Period tabs */}
+        <div className="flex bg-bg-elevated border border-border rounded-xl p-0.5 gap-0.5">
+          {PERIOD_TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setPeriod(t.id)}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] font-medium transition-all ${
+                period === t.id
+                  ? 'bg-accent text-bg-primary shadow-sm'
+                  : 'text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* List */}
       <div className="flex-1 overflow-y-auto p-2">
         {sorted.map((p, idx) => {
           const isCurrentUser = p.id === currentUserId;
-          const elapsed = now - p.startedAt;
+          const ms = getMsForPeriod(p);
           const rank = idx + 1;
 
           return (
@@ -55,7 +103,6 @@ function RoomLeaderboard({
                 isCurrentUser ? 'bg-accent/8 border border-accent/20' : 'hover:bg-bg-elevated/50'
               }`}
             >
-              {/* Rank */}
               <div className="w-5 flex-shrink-0 text-center">
                 {rank <= 3
                   ? <span className="text-sm leading-none">{MEDALS[rank - 1]}</span>
@@ -84,7 +131,7 @@ function RoomLeaderboard({
 
               <div className="flex-shrink-0 text-right">
                 <span className={`text-xs font-mono font-medium ${rank === 1 ? 'text-accent' : 'text-text-secondary'}`}>
-                  {formatShortDuration(elapsed)}
+                  {period === 'session' ? formatShortDuration(ms) : formatHours(ms)}
                 </span>
               </div>
             </div>
@@ -109,6 +156,9 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave }: P
       joinedAt: Date.now(),
       startedAt: Date.now(),
       isActive: true,
+      weeklyMs: 0,
+      monthlyMs: 0,
+      totalMs: 0,
     };
     return [me, ...initialRoom.participants];
   });

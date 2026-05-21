@@ -26,6 +26,9 @@ export interface Participant {
   joinedAt: number;
   startedAt: number;
   isActive: boolean;
+  weeklyMs: number;
+  monthlyMs: number;
+  totalMs: number;
 }
 
 export interface StudyRoom {

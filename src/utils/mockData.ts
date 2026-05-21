@@ -109,6 +109,9 @@ export function generateMockRooms(): StudyRoom[] {
       ];
       const colors = palettes[seed % palettes.length];
       const startedAgo = Math.floor(rand() * 7200000);
+      const weeklyHours = 2 + rand() * 28;
+      const monthlyHours = weeklyHours * 3.5 + rand() * 20;
+      const totalHours = monthlyHours * 5 + rand() * 200;
 
       participants.push({
         id: `mock-${ri}-${i}`,
@@ -119,6 +122,9 @@ export function generateMockRooms(): StudyRoom[] {
         joinedAt: now - startedAgo - 60000,
         startedAt: now - startedAgo,
         isActive: true,
+        weeklyMs: Math.round(weeklyHours * 3600000),
+        monthlyMs: Math.round(monthlyHours * 3600000),
+        totalMs: Math.round(totalHours * 3600000),
       });
     }
 
