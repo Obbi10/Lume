@@ -8,6 +8,7 @@ import CreateRoomModal from './components/CreateRoomModal';
 
 const PROFILE_KEY = 'lume_profile';
 const TODAY_KEY   = 'lume_today';
+const ROOMS_KEY   = 'lume_rooms';
 
 function loadProfile(): UserProfile | null {
   try {
@@ -42,10 +43,21 @@ function saveTodayMs(ms: number) {
   localStorage.setItem(TODAY_KEY, JSON.stringify({ date: new Date().toDateString(), ms }));
 }
 
+function loadRooms(): StudyRoom[] {
+  try {
+    const raw = localStorage.getItem(ROOMS_KEY);
+    return raw ? (JSON.parse(raw) as StudyRoom[]) : [];
+  } catch { return []; }
+}
+
+function saveRooms(rooms: StudyRoom[]) {
+  localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
+}
+
 export default function App() {
   const [view, setView]         = useState<View>(() => loadProfile() ? 'rooms' : 'onboarding');
   const [profile, setProfile]   = useState<UserProfile | null>(loadProfile);
-  const [rooms, setRooms]       = useState<StudyRoom[]>([]);
+  const [rooms, setRooms]       = useState<StudyRoom[]>(loadRooms);
   const [activeRoom, setActiveRoom] = useState<StudyRoom | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [todayMs, setTodayMs]   = useState<number>(loadTodayMs);
@@ -53,6 +65,7 @@ export default function App() {
   // Keep localStorage in sync
   useEffect(() => { if (profile) saveProfile(profile); }, [profile]);
   useEffect(() => { saveTodayMs(todayMs); }, [todayMs]);
+  useEffect(() => { saveRooms(rooms); }, [rooms]);
 
   const handleOnboardingComplete = useCallback((p: UserProfile) => {
     saveProfile(p);
