@@ -129,6 +129,7 @@ export function generateMockRooms(): StudyRoom[] {
         joinedAt: now - startedAgo - 60000,
         startedAt: now - startedAgo,
         isActive: true,
+        sessionMs: 0,
         weeklyMs: Math.round(weeklyHours * 3600000),
         monthlyMs: Math.round(monthlyHours * 3600000),
         totalMs: Math.round(totalHours * 3600000),

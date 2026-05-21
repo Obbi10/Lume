@@ -30,6 +30,7 @@ export interface Participant {
   joinedAt: number;
   startedAt: number;
   isActive: boolean;
+  sessionMs: number;
   weeklyMs: number;
   monthlyMs: number;
   totalMs: number;

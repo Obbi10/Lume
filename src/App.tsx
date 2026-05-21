@@ -12,7 +12,16 @@ const TODAY_KEY   = 'lume_today';
 function loadProfile(): UserProfile | null {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
-    return raw ? (JSON.parse(raw) as UserProfile) : null;
+    if (!raw) return null;
+    const p = JSON.parse(raw) as UserProfile;
+    // Sanitize: guard against undefined/NaN from profiles saved before stats fields existed
+    return {
+      ...p,
+      streak:    (Number.isFinite(p.streak)    && p.streak    >= 0) ? p.streak    : 1,
+      weeklyMs:  (Number.isFinite(p.weeklyMs)  && p.weeklyMs  >= 0) ? p.weeklyMs  : 0,
+      monthlyMs: (Number.isFinite(p.monthlyMs) && p.monthlyMs >= 0) ? p.monthlyMs : 0,
+      totalMs:   (Number.isFinite(p.totalMs)   && p.totalMs   >= 0) ? p.totalMs   : 0,
+    };
   } catch { return null; }
 }
 
@@ -72,14 +81,16 @@ export default function App() {
 
   // Fired each time the user confirms a session complete modal
   const handleSessionConfirmed = useCallback((ms: number) => {
+    if (!Number.isFinite(ms) || ms <= 0) return;
     setTodayMs(prev => prev + ms);
     setProfile(prev => {
       if (!prev) return prev;
+      const safe = (v: number) => (Number.isFinite(v) && v >= 0 ? v : 0);
       const updated = {
         ...prev,
-        weeklyMs:  prev.weeklyMs  + ms,
-        monthlyMs: prev.monthlyMs + ms,
-        totalMs:   prev.totalMs   + ms,
+        weeklyMs:  safe(prev.weeklyMs)  + ms,
+        monthlyMs: safe(prev.monthlyMs) + ms,
+        totalMs:   safe(prev.totalMs)   + ms,
       };
       saveProfile(updated);
       return updated;

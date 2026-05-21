@@ -45,16 +45,10 @@ function RoomLeaderboard({
   participants: Participant[];
   currentUserId: string;
 }) {
-  const [period, setPeriod] = useState<Period>('session');
-  const [now, setNow] = useState(Date.now());
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 5000);
-    return () => clearInterval(id);
-  }, []);
+  const [period, setPeriod] = useState<Period>('weekly');
 
   const getMsForPeriod = (p: Participant) => {
-    if (period === 'session') return now - p.startedAt;
+    if (period === 'session') return p.sessionMs;
     if (period === 'weekly') return p.weeklyMs;
     if (period === 'monthly') return p.monthlyMs;
     return p.totalMs;
@@ -149,6 +143,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
   const [rightTab, setRightTab] = useState<RightTab>('people');
   const [messages, setMessages] = useState<ChatMessage[]>(initialRoom.messages);
   const [participants, setParticipants] = useState<Participant[]>(() => {
+    const safe = (v: number) => (Number.isFinite(v) && v >= 0 ? v : 0);
     const me: Participant = {
       id: currentUser.id,
       name: currentUser.name,
@@ -158,9 +153,10 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
       joinedAt: Date.now(),
       startedAt: Date.now(),
       isActive: true,
-      weeklyMs: currentUser.weeklyMs,
-      monthlyMs: currentUser.monthlyMs,
-      totalMs: currentUser.totalMs,
+      sessionMs: 0,
+      weeklyMs:  safe(currentUser.weeklyMs),
+      monthlyMs: safe(currentUser.monthlyMs),
+      totalMs:   safe(currentUser.totalMs),
     };
     return [me, ...initialRoom.participants];
   });
@@ -198,7 +194,7 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
     // Update current user's leaderboard totals in this room
     setParticipants(prev => prev.map(p =>
       p.id === currentUser.id
-        ? { ...p, weeklyMs: p.weeklyMs + ms, monthlyMs: p.monthlyMs + ms, totalMs: p.totalMs + ms }
+        ? { ...p, sessionMs: p.sessionMs + ms, weeklyMs: p.weeklyMs + ms, monthlyMs: p.monthlyMs + ms, totalMs: p.totalMs + ms }
         : p
     ));
 
