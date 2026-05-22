@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { StudyRoom as StudyRoomType, UserProfile, ChatMessage, Participant } from '../types';
 import { db } from '../firebase';
 import { ref, set, update, remove, push, onValue, onDisconnect } from 'firebase/database';
@@ -7,13 +7,21 @@ import ChatBox from './ChatBox';
 import ParticipantCard from './ParticipantCard';
 import AbstractAvatar from './AbstractAvatar';
 import SessionCompleteModal from './SessionCompleteModal';
-import { ArrowLeft, Users, MessageSquare, Clock, Trophy } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, Trophy, Settings, Trash2, X, LogOut, Crown } from 'lucide-react';
 import { formatShortDuration } from '../utils/time';
+
+const SUBJECT_OPTIONS = [
+  'Mixed', 'Sciences', 'Humanities', 'STEM', 'Languages', 'Arts',
+  'Social Sciences', 'Business', 'Technology', 'Relaxed',
+];
 
 interface Props {
   room: StudyRoomType;
   currentUser: UserProfile;
   onLeave: () => void;
+  onLeaveRoom: () => void;
+  onDeleteRoom: () => void;
+  onUpdateRoom: (updates: { name: string; subject: string; maxCapacity: number }) => void;
   onSessionConfirmed: (ms: number) => void;
 }
 
@@ -43,9 +51,11 @@ function formatHours(ms: number): string {
 function RoomLeaderboard({
   participants,
   currentUserId,
+  ownerId,
 }: {
   participants: Participant[];
   currentUserId: string;
+  ownerId: string;
 }) {
   const [period, setPeriod] = useState<Period>('weekly');
 
@@ -87,6 +97,7 @@ function RoomLeaderboard({
       <div className="flex-1 overflow-y-auto p-2">
         {sorted.map((p, idx) => {
           const isCurrentUser = p.id === currentUserId;
+          const isRoomOwner = p.id === ownerId;
           const ms = getMsForPeriod(p);
           const rank = idx + 1;
           return (
@@ -105,6 +116,7 @@ function RoomLeaderboard({
               <AbstractAvatar seed={p.artSeed} colors={p.artColors} size={30} className={isCurrentUser ? 'ring-2 ring-accent/40' : ''} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1">
+                  {isRoomOwner && <Crown size={10} className="text-yellow-400 flex-shrink-0" />}
                   <span className={`text-xs font-medium truncate ${isCurrentUser ? 'text-accent' : 'text-text-primary'}`}>
                     {p.name.split(' ')[0]}
                   </span>
@@ -127,7 +139,15 @@ function RoomLeaderboard({
   );
 }
 
-export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onSessionConfirmed }: Props) {
+export default function StudyRoom({
+  room: initialRoom,
+  currentUser,
+  onLeave,
+  onLeaveRoom,
+  onDeleteRoom,
+  onUpdateRoom,
+  onSessionConfirmed,
+}: Props) {
   const [activePanel, setActivePanel] = useState<Panel>('timer');
   const [rightTab, setRightTab] = useState<RightTab>('people');
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -136,7 +156,18 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
   const [pendingSessionMs, setPendingSessionMs] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  // Owner UI state
+  const [showOwnerMenu, setShowOwnerMenu] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [editName, setEditName] = useState(initialRoom.name);
+  const [editSubject, setEditSubject] = useState(initialRoom.subject);
+  const [editCapacity, setEditCapacity] = useState(initialRoom.maxCapacity);
+
   const roomCode = initialRoom.code;
+  const isOwner = initialRoom.ownerId === currentUser.id;
+  const presenceWritten = useRef(false);
 
   // Write own presence on mount; remove it on leave or disconnect
   useEffect(() => {
@@ -156,18 +187,25 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
       totalMs:   safe(currentUser.totalMs),
     };
     const pRef = ref(db, `rooms/${roomCode}/participants/${currentUser.id}`);
-    set(pRef, me).catch(console.error);
-    onDisconnect(pRef).remove(); // clean up if tab closes unexpectedly
+    set(pRef, me)
+      .then(() => { presenceWritten.current = true; })
+      .catch(console.error);
+    onDisconnect(pRef).remove();
     return () => { remove(pRef).catch(console.error); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Live participants feed
+  // Live participants feed — also detects being kicked
   useEffect(() => {
     const pRef = ref(db, `rooms/${roomCode}/participants`);
     return onValue(pRef, (snap) => {
       const data = snap.val();
-      setParticipants(data ? (Object.values(data) as Participant[]) : []);
+      const list = data ? (Object.values(data) as Participant[]) : [];
+      setParticipants(list);
+      // If our presence was written but we're no longer in the list, we were kicked
+      if (presenceWritten.current && !list.find(p => p.id === currentUser.id)) {
+        onLeaveRoom();
+      }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -191,6 +229,14 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
     return () => window.removeEventListener('resize', handler);
   }, []);
 
+  // Close owner menu when clicking outside
+  useEffect(() => {
+    if (!showOwnerMenu) return;
+    const handler = () => setShowOwnerMenu(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [showOwnerMenu]);
+
   const handleSendMessage = useCallback((text: string) => {
     push(ref(db, `rooms/${roomCode}/messages`), {
       id: `msg-${Date.now()}`,
@@ -210,7 +256,6 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
     const ms = pendingSessionMs;
     setSessionDuration(prev => prev + ms);
 
-    // Update own stats in Firebase — the live listener propagates the change to all devices
     const currentP = participants.find(p => p.id === currentUser.id);
     const safe = (v: number | undefined) => (Number.isFinite(v) && (v ?? 0) >= 0 ? (v ?? 0) : 0);
     update(ref(db, `rooms/${roomCode}/participants/${currentUser.id}`), {
@@ -232,6 +277,21 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
     setPendingSessionMs(null);
   }, [pendingSessionMs, currentUser, participants, onSessionConfirmed, roomCode]);
 
+  const handleKickParticipant = useCallback((userId: string) => {
+    remove(ref(db, `rooms/${roomCode}/participants/${userId}`)).catch(console.error);
+  }, [roomCode]);
+
+  const handleConfirmDelete = useCallback(() => {
+    remove(ref(db, `rooms/${roomCode}`)).catch(console.error);
+    onDeleteRoom();
+  }, [roomCode, onDeleteRoom]);
+
+  const handleSaveEdit = useCallback(() => {
+    if (editName.trim().length < 3) return;
+    onUpdateRoom({ name: editName.trim(), subject: editSubject, maxCapacity: editCapacity });
+    setShowEditModal(false);
+  }, [editName, editSubject, editCapacity, onUpdateRoom]);
+
   const mobileTabs: { id: Panel; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'timer', label: 'Timer', icon: <Clock size={14} /> },
     { id: 'ranks', label: 'Ranks', icon: <Trophy size={14} /> },
@@ -244,6 +304,36 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
     { id: 'ranks', label: 'Ranks', icon: <Trophy size={12} /> },
     { id: 'chat', label: 'Chat', icon: <MessageSquare size={12} /> },
   ];
+
+  const peoplePanel = (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-2">
+        <div className="space-y-0.5">
+          {participants.map(p => (
+            <ParticipantCard
+              key={p.id}
+              participant={p}
+              isCurrentUser={p.id === currentUser.id}
+              isOwner={p.id === initialRoom.ownerId}
+              canKick={isOwner}
+              onKick={() => handleKickParticipant(p.id)}
+            />
+          ))}
+        </div>
+      </div>
+      {!isOwner && (
+        <div className="p-2 border-t border-border flex-shrink-0">
+          <button
+            onClick={() => setShowLeaveConfirm(true)}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-xs font-medium text-text-muted border border-border hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/5 transition-all"
+          >
+            <LogOut size={13} />
+            Leave Room
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="h-dvh bg-bg-primary flex flex-col overflow-hidden">
@@ -262,6 +352,37 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
             <span className="text-accent/60 font-mono tracking-widest">{initialRoom.code}</span>
           </div>
         </div>
+
+        {/* Owner settings button */}
+        {isOwner && (
+          <div className="relative">
+            <button
+              onClick={e => { e.stopPropagation(); setShowOwnerMenu(v => !v); }}
+              className="text-text-muted hover:text-text-primary transition-colors p-1.5 rounded-lg hover:bg-bg-elevated"
+              title="Room settings"
+            >
+              <Settings size={16} />
+            </button>
+            {showOwnerMenu && (
+              <div className="absolute right-0 top-full mt-1 z-20 glass rounded-xl border border-border shadow-card min-w-[150px] py-1 animate-fade-in">
+                <button
+                  onClick={e => { e.stopPropagation(); setShowOwnerMenu(false); setEditName(initialRoom.name); setEditSubject(initialRoom.subject); setEditCapacity(initialRoom.maxCapacity); setShowEditModal(true); }}
+                  className="w-full px-3 py-2 text-left text-xs text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors flex items-center gap-2"
+                >
+                  <Settings size={12} />
+                  Edit Room
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setShowOwnerMenu(false); setShowDeleteConfirm(true); }}
+                  className="w-full px-3 py-2 text-left text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2"
+                >
+                  <Trash2 size={12} />
+                  Delete Room
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex -space-x-1.5">
           {participants.slice(0, 4).map(p => (
@@ -314,22 +435,18 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
 
               <div className="flex-1 min-h-0 overflow-hidden">
                 {rightTab === 'people' && (
-                  <div className="p-2 overflow-y-auto h-full animate-fade-in">
-                    <div className="space-y-0.5">
-                      {participants.map(p => (
-                        <ParticipantCard key={p.id} participant={p} isCurrentUser={p.id === currentUser.id} />
-                      ))}
-                    </div>
+                  <div className="flex flex-col h-full animate-fade-in">
+                    {peoplePanel}
                   </div>
                 )}
                 {rightTab === 'ranks' && (
                   <div className="flex flex-col h-full animate-fade-in">
-                    <RoomLeaderboard participants={participants} currentUserId={currentUser.id} />
+                    <RoomLeaderboard participants={participants} currentUserId={currentUser.id} ownerId={initialRoom.ownerId} />
                   </div>
                 )}
                 {rightTab === 'chat' && (
                   <div className="flex flex-col h-full animate-fade-in">
-                    <ChatBox messages={messages} currentUser={currentUser} onSend={handleSendMessage} />
+                    <ChatBox messages={messages} currentUser={currentUser} participants={participants} onSend={handleSendMessage} />
                   </div>
                 )}
               </div>
@@ -337,7 +454,6 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
           </>
         ) : (
           <div className="flex-1 min-h-0 flex flex-col">
-            {/* Content — fills all space above the tab bar */}
             <div className="flex-1 min-h-0 overflow-hidden">
               {activePanel === 'timer' && (
                 <div className="flex flex-col items-center justify-center p-8 h-full animate-fade-in">
@@ -354,26 +470,21 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
               )}
               {activePanel === 'ranks' && (
                 <div className="flex flex-col h-full animate-fade-in">
-                  <RoomLeaderboard participants={participants} currentUserId={currentUser.id} />
+                  <RoomLeaderboard participants={participants} currentUserId={currentUser.id} ownerId={initialRoom.ownerId} />
                 </div>
               )}
               {activePanel === 'people' && (
-                <div className="p-4 overflow-y-auto h-full animate-fade-in">
-                  <div className="space-y-1">
-                    {participants.map(p => (
-                      <ParticipantCard key={p.id} participant={p} isCurrentUser={p.id === currentUser.id} />
-                    ))}
-                  </div>
+                <div className="flex flex-col h-full animate-fade-in">
+                  {peoplePanel}
                 </div>
               )}
               {activePanel === 'chat' && (
                 <div className="flex flex-col h-full animate-fade-in">
-                  <ChatBox messages={messages} currentUser={currentUser} onSend={handleSendMessage} />
+                  <ChatBox messages={messages} currentUser={currentUser} participants={participants} onSend={handleSendMessage} />
                 </div>
               )}
             </div>
 
-            {/* Tab bar — pinned to bottom */}
             <div className="flex flex-shrink-0 border-t border-border bg-bg-secondary">
               {mobileTabs.map(tab => (
                 <button
@@ -399,6 +510,140 @@ export default function StudyRoom({ room: initialRoom, currentUser, onLeave, onS
 
       {pendingSessionMs !== null && (
         <SessionCompleteModal durationMs={pendingSessionMs} onConfirm={handleConfirmSession} />
+      )}
+
+      {/* Edit Room Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 w-full max-w-sm border border-border animate-slide-up shadow-card">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-text-primary font-semibold">Edit Room</h3>
+              <button onClick={() => setShowEditModal(false)} className="text-text-muted hover:text-text-primary transition-colors p-1 rounded-lg hover:bg-bg-elevated">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-text-muted text-xs uppercase tracking-wider block mb-2">Room Name</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSaveEdit()}
+                  className="w-full bg-bg-elevated border border-border rounded-xl px-4 py-3 text-text-primary placeholder-text-muted text-sm focus:border-accent/50 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-text-muted text-xs uppercase tracking-wider block mb-2">Focus Area</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {SUBJECT_OPTIONS.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setEditSubject(s)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
+                        editSubject === s
+                          ? 'border-accent bg-accent/10 text-accent'
+                          : 'border-border text-text-muted hover:border-accent/30 hover:text-text-secondary'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-text-muted text-xs uppercase tracking-wider block mb-2">
+                  Max Capacity: <span className="text-accent">{editCapacity}</span>
+                </label>
+                <input
+                  type="range"
+                  min={2}
+                  max={20}
+                  value={editCapacity}
+                  onChange={e => setEditCapacity(Number(e.target.value))}
+                  className="w-full accent-[#38bdf8]"
+                />
+                <div className="flex justify-between text-text-muted text-xs mt-1">
+                  <span>2</span><span>20</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium text-text-muted border border-border hover:border-accent/30 hover:text-text-secondary transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={editName.trim().length < 3}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-accent text-bg-primary hover:bg-accent/90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Room Confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 w-full max-w-xs border border-border animate-slide-up shadow-card text-center">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={20} className="text-red-400" />
+            </div>
+            <h3 className="text-text-primary font-semibold mb-2">Delete Room?</h3>
+            <p className="text-text-muted text-sm mb-6">This will remove the room for everyone. This can't be undone.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-text-muted border border-border hover:border-accent/30 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white hover:bg-red-500/90 transition-all"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Room Confirmation (non-owner) */}
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="glass rounded-2xl p-6 w-full max-w-xs border border-border animate-slide-up shadow-card text-center">
+            <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto mb-4">
+              <LogOut size={20} className="text-orange-400" />
+            </div>
+            <h3 className="text-text-primary font-semibold mb-2">Leave Room?</h3>
+            <p className="text-text-muted text-sm mb-6">This will remove the room from your list.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium text-text-muted border border-border hover:border-accent/30 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onLeaveRoom}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-orange-500 text-white hover:bg-orange-500/90 transition-all"
+              >
+                Leave
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

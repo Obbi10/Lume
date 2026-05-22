@@ -156,6 +156,7 @@ export function generateMockRooms(): StudyRoom[] {
       name: r.name,
       subject: r.subject,
       code: seededCode(rand),
+      ownerId: '',
       participants,
       maxCapacity: 10,
       messages,

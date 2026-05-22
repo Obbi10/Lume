@@ -17,7 +17,7 @@ function generateRoomCode(): string {
 
 interface Props {
   onClose: () => void;
-  onCreate: (room: Omit<StudyRoom, 'participants' | 'messages' | 'createdAt'>) => void;
+  onCreate: (room: Omit<StudyRoom, 'participants' | 'messages' | 'createdAt' | 'ownerId'>) => void;
 }
 
 export default function CreateRoomModal({ onClose, onCreate }: Props) {

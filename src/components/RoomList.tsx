@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { StudyRoom, UserProfile } from '../types';
 import { generateShareCode } from '../utils/roomCode';
 import AbstractAvatar from './AbstractAvatar';
-import { Users, ArrowRight, Plus, BookOpen, Flame, Clock, Copy, Check, Hash } from 'lucide-react';
+import { Users, ArrowRight, Plus, BookOpen, Flame, Clock, Copy, Check, Hash, LogOut, Crown } from 'lucide-react';
 
 interface Props {
   rooms: StudyRoom[];
@@ -12,6 +12,7 @@ interface Props {
   onJoinByCode: (code: string) => boolean;
   onViewProfile: () => void;
   onCreateRoom: () => void;
+  onLeaveRoom: (roomId: string) => void;
 }
 
 function formatTodayTime(ms: number): string {
@@ -24,7 +25,17 @@ function formatTodayTime(ms: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
+function RoomCard({
+  room,
+  isOwner,
+  onJoin,
+  onLeave,
+}: {
+  room: StudyRoom;
+  isOwner: boolean;
+  onJoin: () => void;
+  onLeave: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const isFull = room.participants.length >= room.maxCapacity;
 
@@ -37,20 +48,30 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleLeave = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onLeave();
+  };
+
   return (
     <div className="glass rounded-2xl p-5 border border-border hover:border-accent/30 transition-all group animate-fade-in hover:glow-blue">
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-text-primary font-semibold text-sm truncate">{room.name}</h3>
+          <div className="flex items-center gap-1.5">
+            {isOwner && <Crown size={12} className="text-yellow-400 flex-shrink-0" />}
+            <h3 className="text-text-primary font-semibold text-sm truncate">{room.name}</h3>
+          </div>
           <span className="text-accent/70 text-xs">{room.subject}</span>
         </div>
-        <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border flex-shrink-0 ml-2 ${
-          isFull
-            ? 'border-red-500/30 text-red-400 bg-red-500/5'
-            : 'border-green-500/30 text-green-400 bg-green-500/5'
-        }`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${isFull ? 'bg-red-400' : 'bg-green-400 live-dot'}`} />
-          {isFull ? 'Full' : 'Open'}
+        <div className="flex items-center gap-2 ml-2">
+          <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border flex-shrink-0 ${
+            isFull
+              ? 'border-red-500/30 text-red-400 bg-red-500/5'
+              : 'border-green-500/30 text-green-400 bg-green-500/5'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isFull ? 'bg-red-400' : 'bg-green-400 live-dot'}`} />
+            {isFull ? 'Full' : 'Open'}
+          </div>
         </div>
       </div>
 
@@ -95,22 +116,32 @@ function RoomCard({ room, onJoin }: { room: StudyRoom; onJoin: () => void }) {
         </div>
       </div>
 
-      <button
-        onClick={onJoin}
-        disabled={isFull}
-        className={`w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-          isFull
-            ? 'bg-bg-elevated text-text-muted cursor-not-allowed'
-            : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent hover:text-bg-primary'
-        }`}
-      >
-        {isFull ? 'Room Full' : <>Enter Room <ArrowRight size={14} /></>}
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={handleLeave}
+          className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-medium text-text-muted border border-border hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/5 transition-all flex-shrink-0"
+          title={isOwner ? 'Delete room' : 'Leave room'}
+        >
+          <LogOut size={13} />
+          {isOwner ? 'Delete' : 'Leave'}
+        </button>
+        <button
+          onClick={onJoin}
+          disabled={isFull}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+            isFull
+              ? 'bg-bg-elevated text-text-muted cursor-not-allowed'
+              : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent hover:text-bg-primary'
+          }`}
+        >
+          {isFull ? 'Room Full' : <>Enter Room <ArrowRight size={14} /></>}
+        </button>
+      </div>
     </div>
   );
 }
 
-export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinByCode, onViewProfile, onCreateRoom }: Props) {
+export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinByCode, onViewProfile, onCreateRoom, onLeaveRoom }: Props) {
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
 
@@ -231,7 +262,13 @@ export default function RoomList({ rooms, currentUser, todayMs, onJoin, onJoinBy
             <p className="text-text-muted text-xs uppercase tracking-wider mb-3">Your Rooms</p>
             <div className="grid sm:grid-cols-2 gap-4">
               {rooms.map(room => (
-                <RoomCard key={room.id} room={room} onJoin={() => onJoin(room)} />
+                <RoomCard
+                  key={room.id}
+                  room={room}
+                  isOwner={room.ownerId === currentUser.id}
+                  onJoin={() => onJoin(room)}
+                  onLeave={() => onLeaveRoom(room.id)}
+                />
               ))}
             </div>
           </>

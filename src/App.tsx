@@ -100,6 +100,7 @@ export default function App() {
         name: decoded.name,
         subject: decoded.subject,
         code: decoded.code,
+        ownerId: '',
         participants: [],
         messages: [],
         maxCapacity: decoded.maxCapacity,
@@ -137,9 +138,10 @@ export default function App() {
     });
   }, []);
 
-  const handleCreateRoom = useCallback((roomData: Omit<StudyRoom, 'participants' | 'messages' | 'createdAt'>) => {
+  const handleCreateRoom = useCallback((roomData: Omit<StudyRoom, 'participants' | 'messages' | 'createdAt' | 'ownerId'>) => {
     const newRoom: StudyRoom = {
       ...roomData,
+      ownerId: profile!.id,
       participants: [],
       messages: [],
       createdAt: Date.now(),
@@ -148,6 +150,31 @@ export default function App() {
     setActiveRoom(newRoom);
     setShowCreateModal(false);
     setView('room');
+  }, [profile]);
+
+  const handleLeaveRoomExplicitly = useCallback(() => {
+    if (!activeRoom) return;
+    setRooms(prev => prev.filter(r => r.id !== activeRoom.id));
+    setActiveRoom(null);
+    setView('rooms');
+  }, [activeRoom]);
+
+  const handleDeleteRoom = useCallback(() => {
+    if (!activeRoom) return;
+    setRooms(prev => prev.filter(r => r.id !== activeRoom.id));
+    setActiveRoom(null);
+    setView('rooms');
+  }, [activeRoom]);
+
+  const handleUpdateRoom = useCallback((updates: { name: string; subject: string; maxCapacity: number }) => {
+    if (!activeRoom) return;
+    const updated = { ...activeRoom, ...updates };
+    setRooms(prev => prev.map(r => r.id === activeRoom.id ? updated : r));
+    setActiveRoom(updated);
+  }, [activeRoom]);
+
+  const handleLeaveRoomFromList = useCallback((roomId: string) => {
+    setRooms(prev => prev.filter(r => r.id !== roomId));
   }, []);
 
   const handleUpdateProfile = useCallback((updated: UserProfile) => {
@@ -172,6 +199,7 @@ export default function App() {
           onJoinByCode={handleJoinByCode}
           onViewProfile={() => setView('profile')}
           onCreateRoom={() => setShowCreateModal(true)}
+          onLeaveRoom={handleLeaveRoomFromList}
         />
       )}
 
@@ -180,6 +208,9 @@ export default function App() {
           room={activeRoom}
           currentUser={profile}
           onLeave={handleLeaveRoom}
+          onLeaveRoom={handleLeaveRoomExplicitly}
+          onDeleteRoom={handleDeleteRoom}
+          onUpdateRoom={handleUpdateRoom}
           onSessionConfirmed={handleSessionConfirmed}
         />
       )}

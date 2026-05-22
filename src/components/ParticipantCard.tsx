@@ -1,15 +1,18 @@
 import type { Participant } from '../types';
 import { formatShortDuration } from '../utils/time';
 import AbstractAvatar from './AbstractAvatar';
-import { Clock } from 'lucide-react';
+import { Clock, Crown, UserX } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface Props {
   participant: Participant;
   isCurrentUser?: boolean;
+  isOwner?: boolean;
+  canKick?: boolean;
+  onKick?: () => void;
 }
 
-export default function ParticipantCard({ participant, isCurrentUser }: Props) {
+export default function ParticipantCard({ participant, isCurrentUser, isOwner, canKick, onKick }: Props) {
   const [elapsed, setElapsed] = useState(Date.now() - participant.startedAt);
 
   useEffect(() => {
@@ -30,11 +33,14 @@ export default function ParticipantCard({ participant, isCurrentUser }: Props) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1">
+          {isOwner && (
+            <Crown size={11} className="text-yellow-400 flex-shrink-0" />
+          )}
           <span className="text-text-primary text-xs font-medium truncate">
             {participant.name.split(' ')[0]}
           </span>
           {isCurrentUser && (
-            <span className="text-accent text-[10px] bg-accent/10 px-1.5 py-0.5 rounded-full">you</span>
+            <span className="text-accent text-[10px] bg-accent/10 px-1.5 py-0.5 rounded-full flex-shrink-0">you</span>
           )}
         </div>
         <div className="flex items-center gap-1 text-text-muted text-[10px]">
@@ -42,6 +48,16 @@ export default function ParticipantCard({ participant, isCurrentUser }: Props) {
           <span>{formatShortDuration(elapsed)}</span>
         </div>
       </div>
+
+      {canKick && !isCurrentUser && (
+        <button
+          onClick={onKick}
+          className="text-text-muted hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10 flex-shrink-0"
+          title="Remove from room"
+        >
+          <UserX size={13} />
+        </button>
+      )}
     </div>
   );
 }
